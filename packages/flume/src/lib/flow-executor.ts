@@ -14,7 +14,6 @@ import type {
   BaseFlowDependencies,
   TransactionStepDefinition,
   EventStepDefinition,
-  BreakStepDefinition,
   FlowExecutionResult,
   FlowEvent,
   FlowEventPublisher,

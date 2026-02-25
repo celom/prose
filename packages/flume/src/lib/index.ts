@@ -11,12 +11,15 @@ export { ValidationError, FlowExecutionError, TimeoutError } from './types.js';
 // Export flow builder API
 export {
   FlowBuilder,
+} from './flow-builder.js';
+
+export {
   createFlow,
   composeFlows,
   parallel,
   sequence,
   type MergeStrategy,
-} from './flow-builder.js';
+} from './flow-factories.js';
 
 // Export executor (advanced usage)
 export { FlowExecutor } from './flow-executor.js';
