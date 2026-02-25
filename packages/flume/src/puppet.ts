@@ -5,8 +5,7 @@
  * Run: npx tsc --noEmit --project packages/flume/tsconfig.lib.json
  */
 
-import { createFlow } from './lib/flow-factories.js';
-import type { FlowBuilder } from './lib/flow-builder.js';
+import { createFlow, type FlowBuilder } from './lib/flow-builder.js';
 import type { BaseFlowDependencies } from './lib/types.js';
 
 // ── Setup ────────────────────────────────────────────────
