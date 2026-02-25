@@ -26,6 +26,15 @@ type UnionToIntersection<U> = (
   : never;
 
 /**
+ * Create a new flow with the given name
+ */
+export function createFlow<TInput, TDeps extends BaseFlowDependencies = never>(
+  name: string,
+) {
+  return new FlowBuilder<TInput, TDeps, Record<string, never>>(name);
+}
+
+/**
  * FlowBuilder provides a fluent API for creating declarative workflows
  */
 export class FlowBuilder<

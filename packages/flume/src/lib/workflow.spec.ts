@@ -5,7 +5,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   createFlow,
-  composeFlows,
   ValidationError,
   TimeoutError,
 } from './index.js';
@@ -641,65 +640,6 @@ describe('Workflow Library', () => {
     });
   });
 
-  describe('Helper Functions', () => {
-    let mockDeps: any;
-
-    beforeEach(() => {
-      mockDeps = {
-        db: {},
-        eventPublisher: {
-          publish: vi.fn().mockResolvedValue(undefined),
-        },
-      };
-    });
-
-    describe('composeFlows', () => {
-      it('should combine multiple flows into one', async () => {
-        const flow1 = createFlow<{ value: number }>('flow1')
-          .step('double', (ctx) => ({
-            doubled: ctx.input.value * 2,
-          }))
-          .build();
-
-        const flow2 = createFlow<{ value: number }>('flow2')
-          .step('triple', (ctx) => ({
-            tripled: ctx.input.value * 3,
-          }))
-          .build();
-
-        const composed = composeFlows('composed', [flow1, flow2] as any);
-
-        expect(composed.name).toBe('composed');
-        expect(composed.steps).toHaveLength(2);
-        expect(composed.steps[0].name).toBe('double');
-        expect(composed.steps[1].name).toBe('triple');
-      });
-
-      it('should execute composed flows in sequence', async () => {
-        const flow1 = createFlow<{ a: number }>('flow1')
-          .step('addOne', (ctx) => ({
-            result: ctx.input.a + 1,
-          }))
-          .build();
-
-        const flow2 = createFlow<{ a: number }>('flow2')
-          .step('multiplyByTwo', (ctx) => ({
-            final: ctx.state.result * 2,
-          }))
-          .build();
-
-        const composed = composeFlows('math', [flow1, flow2] as any);
-        const result = await composed.execute({ a: 5 }, mockDeps);
-
-        expect(result).toEqual({
-          result: 6,
-          final: 12,
-        });
-      });
-    });
-
-  });
-
   describe('Builder .parallel() method', () => {
     it('should execute handlers in parallel and merge results', async () => {
       const flow = createFlow<{ org: string }, EmptyDeps>('builder-parallel')
@@ -1196,52 +1136,6 @@ describe('Workflow Library', () => {
 
       expect(flow1.steps[0].name).toBe('process');
       expect(flow2.steps[0].name).toBe('process');
-    });
-  });
-
-  describe('P0 Fixes - composeFlows Validation', () => {
-    it('should throw on empty flow array', () => {
-      expect(() => composeFlows('test', [])).toThrow(
-        'composeFlows requires at least one flow',
-      );
-    });
-
-    it('should warn on duplicate step names', () => {
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
-      const flow1 = createFlow<Record<string, never>, EmptyDeps>('f1')
-        .validate('check', () => {})
-        .build();
-
-      const flow2 = createFlow<Record<string, never>, EmptyDeps>('f2')
-        .validate('check', () => {}) // DUPLICATE!
-        .build();
-
-      composeFlows('combined', [flow1, flow2]);
-
-      expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Duplicate step names found'),
-      );
-      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('check'));
-
-      warnSpy.mockRestore();
-    });
-
-    it('should execute all composed flows in sequence', async () => {
-      const flow1 = createFlow<Record<string, never>, EmptyDeps>('f1')
-        .step('step1', () => ({ a: 1 }))
-        .build();
-
-      const flow2 = createFlow<Record<string, never>, EmptyDeps>('f2')
-        .step('step2', () => ({ b: 2 }))
-        .build();
-
-      // Cast to any to avoid complex type inference issues
-      const combined = composeFlows('combined', [flow1, flow2] as any);
-
-      const result = await combined.execute({}, {});
-
-      expect(result).toEqual({ a: 1, b: 2 });
     });
   });
 
