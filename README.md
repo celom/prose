@@ -37,6 +37,10 @@ bun nx test flume
 bun nx build flume
 ```
 
+## Credits
+
+Created and maintained by [Carlos Mimoso](https://github.com/celom).
+
 ## License
 
 MIT

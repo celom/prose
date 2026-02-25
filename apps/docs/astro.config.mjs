@@ -7,6 +7,10 @@ export default defineConfig({
   integrations: [
     starlight({
       title: 'Flume',
+      logo: {
+        src: './src/assets/logomark.svg',
+      },
+      favicon: '/favicon.svg',
       description:
         'Declarative workflow DSL for orchestrating complex business operations in TypeScript',
       social: [

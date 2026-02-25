@@ -1,6 +1,7 @@
 {
   "name": "@celom/docs",
   "version": "0.0.0",
+  "author": "Carlos Mimoso",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,7 +11,12 @@
   },
   "dependencies": {
     "@astrojs/starlight": "^0.37.6",
-    "astro": "^5.6.1",
-    "sharp": "^0.34.2"
+    "@astrojs/tailwind": "^6.0.0",
+    "astro": "^5.18.0",
+    "sharp": "^0.34.5",
+    "tailwindcss": "^4.2.1"
+  },
+  "devDependencies": {
+    "pagefind": "^1.4.0"
   }
 }
