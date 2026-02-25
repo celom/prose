@@ -1,7 +1,7 @@
 {
-  "name": "@org/flume",
+  "name": "@celom/flume",
   "version": "0.0.1",
-  "private": true,
+  "private": false,
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -9,7 +9,7 @@
   "exports": {
     "./package.json": "./package.json",
     ".": {
-      "@org/source": "./src/index.ts",
+      "@celom/source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"

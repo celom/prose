@@ -1,1 +1,1 @@
-export * from './lib/flume.js';
+export * from './lib/index.js';

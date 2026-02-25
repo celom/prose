@@ -1,0 +1,416 @@
+/**
+ * Core type definitions for the workflow library
+ */
+
+import { FlowObserver } from './observer.js';
+
+// ──────────────────────────────────────────────────────────
+// Database interfaces
+// ──────────────────────────────────────────────────────────
+
+/**
+ * A database client capable of running transactions.
+ *
+ * Any ORM / driver that exposes a `transaction()` method satisfies this
+ * (e.g. Drizzle, Knex, Prisma).
+ */
+export interface DatabaseClient {
+  transaction<T>(fn: (tx: TransactionClient) => Promise<T>): Promise<T>;
+}
+
+/**
+ * The transaction client passed into transaction step handlers.
+ *
+ * Intentionally opaque so consumers can narrow it to their ORM's
+ * transaction type via the generic parameter on `.transaction()`.
+ */
+export type TransactionClient = unknown;
+
+// ──────────────────────────────────────────────────────────
+// Event interfaces
+// ──────────────────────────────────────────────────────────
+
+/**
+ * A flow event that can be published.
+ *
+ * Only `eventType` is required by the framework; everything else is
+ * pass-through data attached by the application.
+ */
+export interface FlowEvent {
+  eventType: string;
+  [key: string]: unknown;
+}
+
+/**
+ * An event publisher capable of publishing events to named channels.
+ */
+export interface FlowEventPublisher {
+  publish(channel: string, event: FlowEvent): Promise<void> | void;
+}
+
+export type BaseFlowDependencies = {
+  db?: DatabaseClient;
+  eventPublisher?: FlowEventPublisher;
+};
+
+export type FlowState = Record<string, unknown>;
+
+/**
+ * Flow metadata tracked during execution
+ */
+export interface FlowMeta {
+  flowName: string;
+  startedAt: Date;
+  currentStep?: string;
+  correlationId?: string;
+}
+
+/**
+ * Context passed to each step in the flow
+ */
+export interface FlowContext<
+  TInput,
+  TDeps extends BaseFlowDependencies,
+  TState extends FlowState,
+> {
+  readonly input: Readonly<TInput>;
+  state: TState;
+  deps: TDeps;
+  meta: FlowMeta;
+}
+
+/**
+ * Result of a step execution
+ */
+export type StepResult<T> = T | void | undefined;
+
+/**
+ * Condition checker for conditional steps
+ */
+export type StepCondition<
+  TInput,
+  TDeps extends BaseFlowDependencies,
+  TState extends FlowState,
+> = (ctx: FlowContext<TInput, TDeps, TState>) => boolean;
+
+/**
+ * Error handling configuration for flow execution
+ */
+export interface ErrorHandlingConfig {
+  /** Throw error if event publisher is missing (default: true) */
+  throwOnMissingEventPublisher?: boolean;
+  /** Throw error if database is missing for transaction (default: true) */
+  throwOnMissingDatabase?: boolean;
+}
+
+/**
+ * Options for flow execution
+ */
+export interface FlowExecutionOptions<
+  TInput,
+  TDeps extends BaseFlowDependencies,
+  TState extends FlowState,
+> {
+  correlationId?: string;
+  throwOnError?: boolean;
+  /** Timeout in milliseconds for the entire flow */
+  timeout?: number;
+  /** Timeout in milliseconds for individual steps (uses Promise.race to actually interrupt) */
+  stepTimeout?: number;
+  observer?: FlowObserver<TInput, TDeps, TState>;
+  errorHandling?: ErrorHandlingConfig;
+}
+
+/**
+ * Base properties shared by all step types
+ */
+interface BaseStepDefinition<
+  TInput,
+  TDeps extends BaseFlowDependencies,
+  TState extends FlowState,
+> {
+  name: string;
+  condition?: StepCondition<TInput, TDeps, TState>;
+  retryOptions?: RetryOptions;
+}
+
+/**
+ * Validation step - validates input or state without returning data
+ */
+export interface ValidationStepDefinition<
+  TInput,
+  TDeps extends BaseFlowDependencies,
+  TState extends FlowState,
+> extends BaseStepDefinition<TInput, TDeps, TState> {
+  type: 'validate';
+  handler: (ctx: FlowContext<TInput, TDeps, TState>) => void | Promise<void>;
+}
+
+/**
+ * Executor step - performs work and returns state to merge
+ */
+export interface ExecutorStepDefinition<
+  TInput,
+  TDeps extends BaseFlowDependencies,
+  TState extends FlowState,
+> extends BaseStepDefinition<TInput, TDeps, TState> {
+  type: 'step';
+  handler: (
+    ctx: FlowContext<TInput, TDeps, TState>,
+  ) => StepResult<unknown> | Promise<StepResult<unknown>>;
+}
+
+/**
+ * Transaction step - performs work within a database transaction
+ */
+export interface TransactionStepDefinition<
+  TInput,
+  TDeps extends BaseFlowDependencies,
+  TState extends FlowState,
+> extends BaseStepDefinition<TInput, TDeps, TState> {
+  type: 'transaction';
+  handler: (
+    ctx: FlowContext<TInput, TDeps, TState>,
+    tx: TransactionClient,
+  ) => unknown | Promise<unknown>;
+}
+
+/**
+ * Event step - publishes events to a specific channel
+ */
+export interface EventStepDefinition<
+  TInput,
+  TDeps extends BaseFlowDependencies,
+  TState extends FlowState,
+> extends BaseStepDefinition<TInput, TDeps, TState> {
+  type: 'event';
+  channel: string;
+  handler: (
+    ctx: FlowContext<TInput, TDeps, TState>,
+  ) => FlowEvent | FlowEvent[] | void | Promise<FlowEvent | FlowEvent[] | void>;
+}
+
+/**
+ * Break condition checker for short-circuit flow termination
+ */
+export type BreakCondition<
+  TInput,
+  TDeps extends BaseFlowDependencies,
+  TState extends FlowState,
+> = (ctx: FlowContext<TInput, TDeps, TState>) => boolean;
+
+/**
+ * Break return value generator
+ */
+export type BreakReturnValue<
+  TInput,
+  TDeps extends BaseFlowDependencies,
+  TState extends FlowState,
+  TBreakOutput,
+> = (ctx: FlowContext<TInput, TDeps, TState>) => TBreakOutput;
+
+/**
+ * Break step - short-circuits the flow if condition is met
+ *
+ * @example
+ * .step('validateToken', validateVerificationTokenStep)
+ * .breakIf(
+ *   (ctx) => ctx.state.alreadyVerified,
+ *   (ctx) => ({ success: true, alreadyVerified: true })
+ * )
+ */
+export interface BreakStepDefinition<
+  TInput,
+  TDeps extends BaseFlowDependencies,
+  TState extends FlowState,
+> extends BaseStepDefinition<TInput, TDeps, TState> {
+  type: 'break';
+  breakCondition: BreakCondition<TInput, TDeps, TState>;
+  breakReturnValue?: BreakReturnValue<TInput, TDeps, TState, unknown>;
+}
+
+/**
+ * Discriminated union of all step types
+ */
+export type StepDefinition<
+  TInput,
+  TDeps extends BaseFlowDependencies,
+  TState extends FlowState,
+> =
+  | ValidationStepDefinition<TInput, TDeps, TState>
+  | ExecutorStepDefinition<TInput, TDeps, TState>
+  | TransactionStepDefinition<TInput, TDeps, TState>
+  | EventStepDefinition<TInput, TDeps, TState>
+  | BreakStepDefinition<TInput, TDeps, TState>;
+
+/**
+ * Retry configuration for a step
+ */
+export interface RetryOptions {
+  maxAttempts: number;
+  delayMs: number;
+  backoffMultiplier?: number;
+  maxDelayMs?: number;
+  shouldRetry?: (error: Error) => boolean;
+  /** Timeout in milliseconds for this specific step (overrides flow-level stepTimeout) */
+  stepTimeout?: number;
+}
+
+/**
+ * Timeout configuration for flow or step execution
+ */
+export interface TimeoutOptions {
+  /** Timeout in milliseconds for the entire flow */
+  timeout?: number;
+  /** Timeout in milliseconds for individual steps (overrides flow timeout for steps) */
+  stepTimeout?: number;
+}
+
+/**
+ * Error thrown when a step or flow times out
+ */
+export class TimeoutError extends Error {
+  constructor(
+    message: string,
+    public flowName: string,
+    public stepName?: string,
+    public timeoutMs?: number,
+  ) {
+    super(message);
+    this.name = 'TimeoutError';
+  }
+}
+
+/**
+ * Internal result from flow executor indicating whether flow completed normally or short-circuited
+ */
+export interface FlowExecutionResult<TState> {
+  /** The result value (either accumulated state or break return value) */
+  value: TState;
+  /** Whether the flow was short-circuited via breakIf */
+  didBreak: boolean;
+}
+
+/**
+ * Flow configuration - just the definition without execution
+ */
+export interface FlowConfig<
+  TInput,
+  TDeps extends BaseFlowDependencies,
+  TState extends FlowState,
+> {
+  name: string;
+  steps: StepDefinition<TInput, TDeps, TState>[];
+}
+
+/**
+ * Helper type to infer the correct output type
+ * Uses tuple wrapping to properly handle the never type
+ */
+export type InferFlowOutput<TState, TMapperOutput> = [TMapperOutput] extends [
+  never,
+]
+  ? TState
+  : TMapperOutput;
+
+/**
+ * Flow definition containing all steps and execution method
+ */
+export interface FlowDefinition<
+  TInput,
+  TDeps extends BaseFlowDependencies,
+  TState extends FlowState,
+  TMapperOutput = never,
+> {
+  name: string;
+  steps: StepDefinition<TInput, TDeps, TState>[];
+  execute: (
+    input: TInput,
+    deps: TDeps,
+    options?: FlowExecutionOptions<TInput, TDeps, TState>,
+  ) => Promise<InferFlowOutput<TState, TMapperOutput>>;
+}
+
+/**
+ * Validation issue details
+ */
+export interface ValidationIssue {
+  field: string;
+  message: string;
+  value?: unknown;
+}
+
+/**
+ * Error thrown during validation
+ * Supports both single field errors and multiple validation issues
+ */
+export class ValidationError extends Error {
+  public readonly issues: ValidationIssue[];
+
+  constructor(message: string, issues?: ValidationIssue[] | string) {
+    super(message);
+    this.name = 'ValidationError';
+
+    if (typeof issues === 'string') {
+      // Single field error (backward compatible)
+      this.issues = [{ field: issues, message }];
+    } else if (Array.isArray(issues)) {
+      this.issues = issues;
+    } else {
+      // No field specified
+      this.issues = [{ field: 'unknown', message }];
+    }
+  }
+
+  /**
+   * Create a validation error for a single field
+   */
+  static single(
+    field: string,
+    message: string,
+    value?: unknown,
+  ): ValidationError {
+    return new ValidationError(message, [{ field, message, value }]);
+  }
+
+  /**
+   * Create a validation error for multiple fields
+   */
+  static multiple(issues: ValidationIssue[]): ValidationError {
+    const message = `Validation failed: ${issues.map((i) => i.field).join(', ')}`;
+    return new ValidationError(message, issues);
+  }
+
+  /**
+   * Convert to JSON for serialization
+   */
+  toJSON() {
+    return {
+      name: this.name,
+      message: this.message,
+      issues: this.issues,
+    };
+  }
+
+  /**
+   * Get a single field error (for backward compatibility)
+   */
+  get field(): string | undefined {
+    return this.issues[0]?.field;
+  }
+}
+
+/**
+ * Error thrown during flow execution
+ */
+export class FlowExecutionError extends Error {
+  constructor(
+    message: string,
+    public flowName: string,
+    public stepName?: string,
+    public originalError?: Error,
+  ) {
+    super(message);
+    this.name = 'FlowExecutionError';
+  }
+}
