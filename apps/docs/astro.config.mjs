@@ -45,6 +45,7 @@ export default defineConfig({
           autogenerate: { directory: 'examples' },
         },
         { label: 'When to Use Flume', slug: 'comparison' },
+        { label: 'Credits', slug: 'credits' },
       ],
     }),
   ],
