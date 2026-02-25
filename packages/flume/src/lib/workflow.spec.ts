@@ -47,7 +47,7 @@ describe('Workflow Library', () => {
             throw new ValidationError('Invalid email');
           }
         })
-        .step('process', (ctx) => ({
+        .step('process', (_ctx) => ({
           processed: true,
         }))
         .build();
@@ -61,7 +61,7 @@ describe('Workflow Library', () => {
         .stepIf(
           'optionalStep',
           (ctx) => ctx.input.enabled,
-          (ctx) => ({ executed: true }),
+          (_ctx) => ({ executed: true }),
         )
         .build();
 
@@ -71,7 +71,7 @@ describe('Workflow Library', () => {
 
     it('should support transaction steps', () => {
       const flow = createFlow<any, any>('transaction-flow')
-        .transaction('persist', async (ctx, tx) => {
+        .transaction('persist', async (_ctx, _tx) => {
           return { transactionId: 'tx-123' };
         })
         .build();
@@ -82,7 +82,7 @@ describe('Workflow Library', () => {
 
     it('should support event publishing', () => {
       const flow = createFlow('event-flow')
-        .event('auth', (ctx) => ({
+        .event('auth', (_ctx) => ({
           eventType: 'user.create',
           data: 'test',
         }))
@@ -230,8 +230,8 @@ describe('Workflow Library', () => {
     it('should handle multiple events', async () => {
       const flow = createFlow<any, any>('multi-event')
         .events('auth', [
-          (ctx) => ({ eventType: 'user.create', data: 1 }),
-          (ctx) => ({ eventType: 'email.verify', data: 2 }),
+          (_ctx) => ({ eventType: 'user.create', data: 1 }),
+          (_ctx) => ({ eventType: 'email.verify', data: 2 }),
         ])
         .build();
 
@@ -350,7 +350,7 @@ describe('Workflow Library', () => {
 
     it('should handle missing database in transaction', async () => {
       const flow = createFlow<any, any>('no-db')
-        .transaction('persist', async (ctx, tx) => ({ result: 'ok' }))
+        .transaction('persist', async (_ctx, _tx) => ({ result: 'ok' }))
         .build();
 
       await expect(flow.execute({}, { notADb: 'wrong' })).rejects.toThrow(
@@ -1502,6 +1502,55 @@ describe('Workflow Library', () => {
       const duration = Date.now() - start;
 
       expect(duration).toBeLessThan(80);
+    });
+  });
+
+  describe('Builder .map() - output mapper', () => {
+    it('should transform output via mapper', async () => {
+      const flow = createFlow<{ x: number }, EmptyDeps>('map-basic')
+        .step('double', (ctx) => ({ doubled: ctx.input.x * 2 }))
+        .map((input, state) => ({ result: state.doubled, original: input.x }))
+        .build();
+
+      const result = await flow.execute({ x: 5 }, {});
+
+      expect(result).toEqual({ result: 10, original: 5 });
+    });
+
+    it('should preserve mapper when validate is called after map', async () => {
+      const flow = createFlow<{ x: number }, EmptyDeps>('map-then-validate')
+        .step('double', (ctx) => ({ doubled: ctx.input.x * 2 }))
+        .map((_, state) => ({ result: state.doubled }))
+        .validate('noOp', () => { /* intentional no-op */ })
+        .build();
+
+      const result = await flow.execute({ x: 5 }, {});
+
+      expect(result).toEqual({ result: 10 });
+    });
+
+    it('should preserve mapper when step is added after map', async () => {
+      const flow = createFlow<{ x: number }, EmptyDeps>('map-then-step')
+        .step('double', (ctx) => ({ doubled: ctx.input.x * 2 }))
+        .map((_, state) => ({ result: state.doubled }))
+        .step('noOp', () => ({ extra: true }))
+        .build();
+
+      const result = await flow.execute({ x: 3 }, {});
+
+      expect(result).toEqual({ result: 6 });
+    });
+
+    it('should preserve mapper when parallel is added after map', async () => {
+      const flow = createFlow<{ x: number }, EmptyDeps>('map-then-parallel')
+        .step('init', (ctx) => ({ base: ctx.input.x }))
+        .map((_, state) => ({ result: state.base }))
+        .parallel('fetch', 'shallow', () => ({ extra: true }))
+        .build();
+
+      const result = await flow.execute({ x: 7 }, {});
+
+      expect(result).toEqual({ result: 7 });
     });
   });
 });

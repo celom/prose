@@ -110,7 +110,7 @@ export class DefaultObserver<
 
   onFlowStart(flowName: string, input: TInput): void {
     this.logger?.debug?.(
-      `[Workflow] Flow ${flowName} started. Input: ${input}`,
+      `[Workflow] Flow ${flowName} started. Input: ${JSON.stringify(input)}`,
     );
   }
 
@@ -120,7 +120,7 @@ export class DefaultObserver<
     totalDuration: number,
   ): void {
     this.logger?.debug?.(
-      `[Workflow] Flow ${flowName} completed. Output: ${output} - (${totalDuration}ms)`,
+      `[Workflow] Flow ${flowName} completed. Output: ${JSON.stringify(output)} - (${totalDuration}ms)`,
     );
   }
 
