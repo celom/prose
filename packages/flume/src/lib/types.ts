@@ -321,6 +321,7 @@ export interface FlowDefinition<
   TDeps extends BaseFlowDependencies,
   TState extends FlowState,
   TMapperOutput = never,
+  TBreakOutputs = never,
 > {
   name: string;
   steps: StepDefinition<TInput, TDeps, TState>[];
@@ -328,7 +329,7 @@ export interface FlowDefinition<
     input: TInput,
     deps: TDeps,
     options?: FlowExecutionOptions<TInput, TDeps, TState>,
-  ) => Promise<InferFlowOutput<TState, TMapperOutput>>;
+  ) => Promise<InferFlowOutput<TState, TMapperOutput> | TBreakOutputs>;
 }
 
 /**

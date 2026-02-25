@@ -80,6 +80,35 @@ const branchB = base
   })
   .build();
 
+// ── Break output type propagation ────────────────────────
+
+interface CacheInput {
+  key: string;
+}
+
+interface CacheDeps extends BaseFlowDependencies {
+  cache: { get(key: string): string | null };
+}
+
+const cachedLookup = createFlow<CacheInput, CacheDeps>('cachedLookup')
+  .step('checkCache', (ctx) => {
+    const hit = ctx.deps.cache.get(ctx.input.key);
+    return { cacheHit: hit !== null, cachedValue: hit };
+  })
+  .breakIf(
+    (ctx) => ctx.state.cacheHit,
+    (ctx) => ({ fromCache: true as const, value: ctx.state.cachedValue! }),
+  )
+  .step('fetchFromDb', (ctx) => {
+    void (ctx.input.key satisfies string);
+    return { freshValue: `db_result_for_${ctx.input.key}` };
+  })
+  .map((_input, state) => ({
+    fromCache: false as const,
+    freshValue: state.freshValue,
+  }))
+  .build();
+
 // ── Verify output types ──────────────────────────────────
 
 async function _typeAssertions() {
@@ -99,9 +128,26 @@ async function _typeAssertions() {
   const resultB = await branchB.execute({ x: 5 }, undefined as never);
   void (resultB.result satisfies number);
   void (resultB.doubled satisfies number);
+
+  // Break output produces a union: normal path | break path
+  const cacheResult = await cachedLookup.execute(
+    { key: 'test' },
+    { cache: { get: () => null } },
+  );
+  void (cacheResult.fromCache satisfies boolean);
+  void ('value' in cacheResult && cacheResult.value satisfies string);
+  void ('freshValue' in cacheResult && cacheResult.freshValue satisfies string);
+
+  // Narrowing works via the discriminant
+  if (cacheResult.fromCache) {
+    void (cacheResult satisfies { fromCache: true; value: string; });
+  } else {
+    void (cacheResult satisfies { fromCache: false; freshValue: string; });
+  }
 }
 
 void orderFlow;
 void branchA;
 void branchB;
+void cachedLookup;
 void _typeAssertions;

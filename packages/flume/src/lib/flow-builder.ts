@@ -21,6 +21,7 @@ export class FlowBuilder<
   TDeps extends BaseFlowDependencies,
   TState extends FlowState,
   TMapperOutput = never,
+  TBreakOutputs = never,
 > {
   private steps: StepNode<StepDefinition<TInput, TDeps, TState>> | null;
   private length: number;
@@ -57,8 +58,8 @@ export class FlowBuilder<
   validate(
     name: string,
     handler: (ctx: FlowContext<TInput, TDeps, TState>) => void | Promise<void>,
-  ): FlowBuilder<TInput, TDeps, TState, TMapperOutput> {
-    return new FlowBuilder<TInput, TDeps, TState, TMapperOutput>(
+  ): FlowBuilder<TInput, TDeps, TState, TMapperOutput, TBreakOutputs> {
+    return new FlowBuilder<TInput, TDeps, TState, TMapperOutput, TBreakOutputs>(
       this.name,
       { head: { name, type: 'validate', handler }, tail: this.steps },
       this.length + 1,
@@ -74,8 +75,8 @@ export class FlowBuilder<
       ctx: FlowContext<TInput, TDeps, TState>,
     ) => TResult | void | undefined | Promise<TResult | void | undefined>,
     retryOptions?: RetryOptions,
-  ): FlowBuilder<TInput, TDeps, TResult & TState, TMapperOutput> {
-    return new FlowBuilder<TInput, TDeps, TResult & TState, TMapperOutput>(
+  ): FlowBuilder<TInput, TDeps, TResult & TState, TMapperOutput, TBreakOutputs> {
+    return new FlowBuilder<TInput, TDeps, TResult & TState, TMapperOutput, TBreakOutputs>(
       this.name,
       { head: { name, type: 'step', handler, retryOptions }, tail: this.steps as StepNode<StepDefinition<TInput, TDeps, TResult & TState>> | null },
       this.length + 1,
@@ -92,8 +93,8 @@ export class FlowBuilder<
       ctx: FlowContext<TInput, TDeps, TState>,
     ) => TResult | void | undefined | Promise<TResult | void | undefined>,
     retryOptions?: RetryOptions,
-  ): FlowBuilder<TInput, TDeps, TResult & TState, TMapperOutput> {
-    return new FlowBuilder<TInput, TDeps, TResult & TState, TMapperOutput>(
+  ): FlowBuilder<TInput, TDeps, TResult & TState, TMapperOutput, TBreakOutputs> {
+    return new FlowBuilder<TInput, TDeps, TResult & TState, TMapperOutput, TBreakOutputs>(
       this.name,
       { head: { name, type: 'step', handler, condition, retryOptions }, tail: this.steps as StepNode<StepDefinition<TInput, TDeps, TResult & TState>> | null },
       this.length + 1,
@@ -109,8 +110,8 @@ export class FlowBuilder<
       ctx: FlowContext<TInput, TDeps, TState>,
       tx: unknown,
     ) => TResult | Promise<TResult>,
-  ): FlowBuilder<TInput, TDeps, TResult & TState, TMapperOutput> {
-    return new FlowBuilder<TInput, TDeps, TResult & TState, TMapperOutput>(
+  ): FlowBuilder<TInput, TDeps, TResult & TState, TMapperOutput, TBreakOutputs> {
+    return new FlowBuilder<TInput, TDeps, TResult & TState, TMapperOutput, TBreakOutputs>(
       this.name,
       { head: { name, type: 'transaction', handler }, tail: this.steps as StepNode<StepDefinition<TInput, TDeps, TResult & TState>> | null },
       this.length + 1,
@@ -130,8 +131,8 @@ export class FlowBuilder<
       | void
       | Promise<FlowEvent | FlowEvent[] | void>,
     name: string = 'publishEvent',
-  ): FlowBuilder<TInput, TDeps, TState, TMapperOutput> {
-    return new FlowBuilder<TInput, TDeps, TState, TMapperOutput>(
+  ): FlowBuilder<TInput, TDeps, TState, TMapperOutput, TBreakOutputs> {
+    return new FlowBuilder<TInput, TDeps, TState, TMapperOutput, TBreakOutputs>(
       this.name,
       { head: { name, type: 'event', channel, handler: builder }, tail: this.steps },
       this.length + 1,
@@ -153,7 +154,7 @@ export class FlowBuilder<
         | Promise<FlowEvent | FlowEvent[] | void>
     >,
     name: string = 'publishEvents',
-  ): FlowBuilder<TInput, TDeps, TState, TMapperOutput> {
+  ): FlowBuilder<TInput, TDeps, TState, TMapperOutput, TBreakOutputs> {
     const combinedBuilder = async (ctx: FlowContext<TInput, TDeps, TState>) => {
       const events: FlowEvent[] = [];
       for (const builder of builders) {
@@ -169,7 +170,7 @@ export class FlowBuilder<
       return events.length > 0 ? events : undefined;
     };
 
-    return new FlowBuilder<TInput, TDeps, TState, TMapperOutput>(
+    return new FlowBuilder<TInput, TDeps, TState, TMapperOutput, TBreakOutputs>(
       this.name,
       { head: { name, type: 'event', channel, handler: combinedBuilder }, tail: this.steps },
       this.length + 1,
@@ -193,13 +194,20 @@ export class FlowBuilder<
    * )
    * .step('getAccount', getAccountStep)  // Only runs if not already verified
    */
+  breakIf(
+    condition: (ctx: FlowContext<TInput, TDeps, TState>) => boolean,
+  ): FlowBuilder<TInput, TDeps, TState, TMapperOutput, TBreakOutputs | TState>;
+  breakIf<TBreakOutput>(
+    condition: (ctx: FlowContext<TInput, TDeps, TState>) => boolean,
+    returnValue: (ctx: FlowContext<TInput, TDeps, TState>) => TBreakOutput,
+  ): FlowBuilder<TInput, TDeps, TState, TMapperOutput, TBreakOutputs | TBreakOutput>;
   breakIf<TBreakOutput>(
     condition: (ctx: FlowContext<TInput, TDeps, TState>) => boolean,
     returnValue?: (ctx: FlowContext<TInput, TDeps, TState>) => TBreakOutput,
-  ): FlowBuilder<TInput, TDeps, TState, TMapperOutput> {
+  ): FlowBuilder<TInput, TDeps, TState, TMapperOutput, TBreakOutputs | TBreakOutput | TState> {
     const stepName = `break_${this.length}`;
 
-    return new FlowBuilder<TInput, TDeps, TState, TMapperOutput>(
+    return new FlowBuilder<TInput, TDeps, TState, TMapperOutput, TBreakOutputs | TBreakOutput | TState>(
       this.name,
       { head: { name: stepName, type: 'break', breakCondition: condition, breakReturnValue: returnValue }, tail: this.steps },
       this.length + 1,
@@ -212,12 +220,12 @@ export class FlowBuilder<
    */
   withRetry(
     options: RetryOptions,
-  ): FlowBuilder<TInput, TDeps, TState, TMapperOutput> {
+  ): FlowBuilder<TInput, TDeps, TState, TMapperOutput, TBreakOutputs> {
     if (this.steps === null) {
       return this;
     }
 
-    return new FlowBuilder<TInput, TDeps, TState, TMapperOutput>(
+    return new FlowBuilder<TInput, TDeps, TState, TMapperOutput, TBreakOutputs>(
       this.name,
       { head: { ...this.steps.head, retryOptions: options }, tail: this.steps.tail },
       this.length,
@@ -230,8 +238,8 @@ export class FlowBuilder<
    */
   map<TNewOutput>(
     mapper: (input: TInput, state: TState) => TNewOutput,
-  ): FlowBuilder<TInput, TDeps, TState, TNewOutput> {
-    return new FlowBuilder<TInput, TDeps, TState, TNewOutput>(
+  ): FlowBuilder<TInput, TDeps, TState, TNewOutput, TBreakOutputs> {
+    return new FlowBuilder<TInput, TDeps, TState, TNewOutput, TBreakOutputs>(
       this.name,
       this.steps as StepNode<StepDefinition<TInput, TDeps, TState>> | null,
       this.length,
@@ -242,7 +250,7 @@ export class FlowBuilder<
   /**
    * Build the flow definition
    */
-  build(): FlowDefinition<TInput, TDeps, TState, TMapperOutput> {
+  build(): FlowDefinition<TInput, TDeps, TState, TMapperOutput, TBreakOutputs> {
     const steps = this.toArray();
 
     // Validate step name uniqueness
