@@ -1,3 +1,5 @@
 {
-  "recommendations": ["nrwl.angular-console", "esbenp.prettier-vscode"]
+  "recommendations": [
+    "esbenp.prettier-vscode"
+  ]
 }
