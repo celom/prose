@@ -24,13 +24,13 @@ jobs:
       # This enables task distribution via Nx Cloud
       # Run this command as early as possible, before dependencies are installed
       # Learn more at https://nx.dev/ci/reference/nx-cloud-cli#npx-nxcloud-startcirun
-      - run: bun nx start-ci-run --distribute-on="3 linux-medium-js" --stop-agents-after="e2e-ci"
+      - run: bunx nx start-ci-run --distribute-on="3 linux-medium-js" --stop-agents-after="e2e-ci"
 
       - run: bun install --frozen-lockfile
 
       # Prepend any command with "nx record --" to record its logs to Nx Cloud
-      - run: bun nx record -- bun nx format:check --base="remotes/origin/main"
-      - run: bun nx run-many -t lint test build typecheck e2e-ci
+      - run: bunx nx record -- bunx nx format:check --base="remotes/origin/main"
+      - run: bunx nx run-many -t lint test build typecheck e2e-ci
       # Nx Cloud recommends fixes for failures to help you get CI green faster. Learn more: https://nx.dev/ci/features/self-healing-ci
-      - run: bun nx fix-ci
+      - run: bunx nx fix-ci
         if: always()
