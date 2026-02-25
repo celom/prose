@@ -1,0 +1,111 @@
+---
+title: Types
+description: API reference for core TypeScript types exported by Flume.
+sidebar:
+  order: 6
+---
+
+## `FlowContext`
+
+Passed to every step handler.
+
+```typescript
+interface FlowContext<TInput, TDeps, TState> {
+  readonly input: Readonly<TInput>;
+  state: TState;
+  deps: TDeps;
+  meta: FlowMeta;
+  signal: AbortSignal;
+}
+```
+
+| Property | Description |
+|----------|-------------|
+| `input` | Original input, readonly. Never changes during execution. |
+| `state` | Accumulated state from prior steps. Each step's return merges into this. |
+| `deps` | Dependencies injected via `.execute()`. |
+| `meta` | Runtime metadata (see `FlowMeta`). |
+| `signal` | Combined abort signal from flow timeout, step timeout, and external signal. |
+
+## `FlowMeta`
+
+Runtime metadata available via `ctx.meta`.
+
+```typescript
+interface FlowMeta {
+  flowName: string;
+  currentStep: string;
+  startedAt: Date;
+  correlationId: string;
+}
+```
+
+## `RetryOptions`
+
+Configuration for `.withRetry()`.
+
+```typescript
+interface RetryOptions {
+  maxAttempts: number;
+  delayMs: number;
+  backoffMultiplier?: number;
+  maxDelayMs?: number;
+  shouldRetry?: (error: Error) => boolean;
+  stepTimeout?: number;
+}
+```
+
+## `FlowEvent`
+
+The object returned by event builders, enriched with metadata before publishing.
+
+```typescript
+interface FlowEvent {
+  eventType: string;
+  correlationId?: string;
+  [key: string]: unknown;
+}
+```
+
+## `FlowEventPublisher`
+
+Interface for the `eventPublisher` dependency.
+
+```typescript
+interface FlowEventPublisher {
+  publish(channel: string, event: FlowEvent): Promise<void> | void;
+}
+```
+
+## `DatabaseClient`
+
+Interface for the `db` dependency used by `.transaction()` steps.
+
+```typescript
+interface DatabaseClient {
+  transaction<T>(fn: (tx: TransactionClient) => Promise<T>): Promise<T>;
+}
+```
+
+## `TransactionClient`
+
+The transaction client passed to `.transaction()` step handlers. This is an opaque type — it matches whatever your ORM's transaction callback provides.
+
+## `MergeStrategy`
+
+Strategy for `.parallel()` result merging.
+
+```typescript
+type MergeStrategy = 'shallow' | 'error-on-conflict' | 'deep';
+```
+
+## `ValidationIssue`
+
+Field-level validation error detail.
+
+```typescript
+interface ValidationIssue {
+  field: string;
+  message: string;
+}
+```

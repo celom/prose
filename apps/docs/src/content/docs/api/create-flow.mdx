@@ -1,0 +1,71 @@
+---
+title: createFlow
+description: API reference for the createFlow function — the entry point for building flows.
+sidebar:
+  order: 1
+---
+
+## Signature
+
+```typescript
+function createFlow<TInput, TDeps = Record<string, unknown>>(
+  name: string
+): FlowBuilder<TInput, TDeps, {}, never>
+```
+
+## Parameters
+
+### `name`
+
+**Type:** `string`
+
+A human-readable name for the flow. Used in error messages, observer hooks, and `ctx.meta.flowName`.
+
+## Type parameters
+
+### `TInput`
+
+The shape of the input object passed to `.execute()`. This is available as `ctx.input` in every step handler.
+
+```typescript
+const flow = createFlow<{ orderId: string; userId: string }>('process-order');
+```
+
+### `TDeps`
+
+The shape of the dependencies object passed as the second argument to `.execute()`. Defaults to `Record<string, unknown>`.
+
+```typescript
+type Deps = {
+  db: DatabaseClient;
+  eventPublisher: FlowEventPublisher;
+};
+
+const flow = createFlow<{ orderId: string }, Deps>('process-order');
+```
+
+## Returns
+
+A `FlowBuilder` instance with the following initial state:
+- State type: `{}` (empty)
+- Break outputs: `never` (no early exits defined yet)
+
+Chain builder methods (`.step()`, `.validate()`, etc.) to define the flow, then call `.build()`.
+
+## Example
+
+```typescript
+import { createFlow } from '@celom/flume';
+
+const flow = createFlow<{ email: string }>('onboard-user')
+  .step('create', async (ctx) => {
+    const user = await db.createUser(ctx.input.email);
+    return { user };
+  })
+  .build();
+
+const result = await flow.execute(
+  { email: 'alice@example.com' },
+  { db }
+);
+```

@@ -1,0 +1,26 @@
+{
+  "name": "docs",
+  "projectType": "application",
+  "sourceRoot": "apps/docs/src",
+  "targets": {
+    "dev": {
+      "command": "astro dev",
+      "options": {
+        "cwd": "apps/docs"
+      }
+    },
+    "build": {
+      "command": "astro build",
+      "options": {
+        "cwd": "apps/docs"
+      },
+      "outputs": ["{projectRoot}/dist"]
+    },
+    "preview": {
+      "command": "astro preview",
+      "options": {
+        "cwd": "apps/docs"
+      }
+    }
+  }
+}

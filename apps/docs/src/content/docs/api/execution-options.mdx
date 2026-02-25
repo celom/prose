@@ -1,0 +1,71 @@
+---
+title: Execution Options
+description: API reference for FlowExecutionOptions passed to flow.execute().
+sidebar:
+  order: 3
+---
+
+The third argument to `.execute()` is an optional options object.
+
+```typescript
+const result = await flow.execute(input, deps, options);
+```
+
+## Options
+
+### `timeout`
+
+**Type:** `number`
+
+Maximum duration for the entire flow in milliseconds. Throws `TimeoutError` if exceeded.
+
+### `stepTimeout`
+
+**Type:** `number`
+
+Default maximum duration per step in milliseconds. Can be overridden per-step via `.withRetry({ stepTimeout })`.
+
+### `signal`
+
+**Type:** `AbortSignal`
+
+External abort signal for cancellation. Combined with flow/step timeouts into `ctx.signal`.
+
+```typescript
+const controller = new AbortController();
+await flow.execute(input, deps, { signal: controller.signal });
+```
+
+### `observer`
+
+**Type:** `FlowObserver`
+
+Lifecycle hooks for logging, metrics, or tracing. See [Observability guide](/flume/guides/observability/).
+
+### `throwOnError`
+
+**Type:** `boolean`
+**Default:** `true`
+
+When `false`, returns partial accumulated state instead of throwing on step failure.
+
+### `correlationId`
+
+**Type:** `string`
+
+Custom ID propagated to events and observers via `ctx.meta.correlationId`. Auto-generated if not provided.
+
+### `errorHandling`
+
+**Type:** `object`
+
+Control behavior for missing optional dependencies.
+
+```typescript
+{
+  errorHandling: {
+    throwOnMissingDatabase: false,        // warn instead of throwing
+    throwOnMissingEventPublisher: false,   // warn instead of throwing
+  }
+}
+```

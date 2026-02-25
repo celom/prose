@@ -1,0 +1,84 @@
+---
+title: Observability
+description: Hook into flow and step lifecycle events for logging, metrics, and tracing.
+sidebar:
+  order: 8
+---
+
+Pass an observer to `.execute()` to hook into lifecycle events for logging, metrics, or distributed tracing.
+
+```typescript
+import { PinoFlowObserver } from '@celom/flume';
+import pino from 'pino';
+
+const logger = pino();
+const observer = new PinoFlowObserver(logger);
+
+await flow.execute(input, deps, { observer });
+```
+
+## Observer hooks
+
+All hooks are optional — implement only what you need.
+
+| Hook | Called when |
+|------|------------|
+| `onFlowStart(flowName, input)` | Flow begins |
+| `onFlowComplete(flowName, output, duration)` | Flow finishes successfully |
+| `onFlowError(flowName, error, duration)` | Flow fails |
+| `onFlowBreak(flowName, breakStepName, returnValue, duration)` | Flow exits early via `breakIf` |
+| `onStepStart(stepName, context)` | Step begins |
+| `onStepComplete(stepName, result, duration, context)` | Step finishes |
+| `onStepError(stepName, error, duration, context)` | Step fails (after exhausting retries) |
+| `onStepRetry(stepName, attempt, maxAttempts, error)` | Step is about to be retried |
+| `onStepSkipped(stepName, context)` | Conditional step is skipped |
+
+## Inline observer
+
+Pass a partial object with just the hooks you need:
+
+```typescript
+await flow.execute(input, deps, {
+  observer: {
+    onStepComplete: (name, _result, duration) =>
+      console.log(`${name} took ${duration}ms`),
+  },
+});
+```
+
+## Built-in observers
+
+### `DefaultObserver`
+
+Console logging with an optional custom logger interface.
+
+```typescript
+import { DefaultObserver } from '@celom/flume';
+
+const observer = new DefaultObserver();
+// or with a custom logger:
+const observer = new DefaultObserver(myLogger);
+```
+
+### `NoOpObserver`
+
+Silent observer that does nothing. Useful as a default value.
+
+```typescript
+import { NoOpObserver } from '@celom/flume';
+
+const observer = new NoOpObserver();
+```
+
+### `PinoFlowObserver`
+
+Structured logging with any Pino-compatible logger (including Fastify's `request.log`).
+
+```typescript
+import { PinoFlowObserver } from '@celom/flume';
+import pino from 'pino';
+
+const observer = new PinoFlowObserver(pino());
+```
+
+Each hook logs a structured JSON message with the flow name, step name, duration, and relevant data — ready for indexing in Elasticsearch, Datadog, or any log aggregator.

@@ -1,0 +1,64 @@
+---
+title: Getting Started
+description: Install Flume and build your first workflow in minutes.
+---
+
+## Installation
+
+```bash
+npm install @celom/flume
+```
+
+## Your first flow
+
+A flow is a sequence of typed steps that process an input and build up state. Use `createFlow` to start a builder, chain steps, and call `.build()`.
+
+```typescript
+import { createFlow } from '@celom/flume';
+
+const processOrder = createFlow<{ orderId: string }>('process-order')
+  .step('fetch', async (ctx) => {
+    const order = await db.getOrder(ctx.input.orderId);
+    return { order };
+  })
+  .step('charge', async (ctx) => {
+    // ctx.state.order is fully typed here
+    const receipt = await payments.charge(ctx.state.order.total);
+    return { receipt };
+  })
+  .build();
+```
+
+The generic parameter `<{ orderId: string }>` defines the input shape. As you chain steps, TypeScript infers the state type — after the `fetch` step, `ctx.state.order` is available with full type information.
+
+## Running a flow
+
+Call `.execute()` with the input, dependencies, and optional configuration.
+
+```typescript
+const result = await processOrder.execute(
+  { orderId: 'ord_123' },      // input
+  { db, eventPublisher },       // dependencies
+  { timeout: 30_000 }           // options (optional)
+);
+```
+
+The result contains the accumulated state from all steps. If any step fails, a `FlowExecutionError` is thrown with the step name and original error.
+
+## Execution options
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `timeout` | `number` | Max duration for the entire flow (ms) |
+| `stepTimeout` | `number` | Default max duration per step (ms) |
+| `signal` | `AbortSignal` | External signal for cancellation |
+| `observer` | `FlowObserver` | Lifecycle hooks for logging/metrics |
+| `throwOnError` | `boolean` | `false` returns partial state instead of throwing |
+| `correlationId` | `string` | Custom ID propagated to events and observers |
+| `errorHandling` | `object` | Control behavior for missing dependencies |
+
+## Next steps
+
+- Learn about [Core Concepts](/flume/core-concepts/) to understand how flows, steps, and state work
+- Explore [Guides](/flume/guides/retries/) for specific features like retries, timeouts, and transactions
+- See the [API Reference](/flume/api/create-flow/) for detailed documentation

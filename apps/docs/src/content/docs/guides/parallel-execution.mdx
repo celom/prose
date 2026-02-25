@@ -1,0 +1,48 @@
+---
+title: Parallel Execution
+description: Run independent steps concurrently with configurable merge strategies.
+sidebar:
+  order: 6
+---
+
+Use `.parallel()` to run multiple handlers concurrently and merge their results into state.
+
+```typescript
+flow.parallel('fetchAll', 'deep',
+  async (ctx) => ({ users: await fetchUsers() }),
+  async (ctx) => ({ posts: await fetchPosts() }),
+);
+// ctx.state now has both `users` and `posts`
+```
+
+## Merge strategies
+
+The second argument to `.parallel()` determines how results from concurrent handlers are merged.
+
+| Strategy | Behavior |
+|----------|----------|
+| `'shallow'` | `Object.assign()` — later results override earlier ones |
+| `'error-on-conflict'` | Throws if any keys overlap between results |
+| `'deep'` | Recursive merge; arrays are concatenated |
+
+### `'shallow'`
+
+Simple key-level merge. If two handlers return the same key, the later one wins.
+
+### `'error-on-conflict'`
+
+Throws an error if two handlers return overlapping keys. Use this when you expect all handlers to produce distinct state.
+
+### `'deep'`
+
+Recursively merges nested objects and concatenates arrays. Useful when handlers return data with shared structure.
+
+## Type safety
+
+TypeScript infers the combined return type from all parallel handlers. The state after a `.parallel()` step includes all keys from all handlers.
+
+## Error handling
+
+If any parallel handler throws, all results are discarded and the error propagates. There is no partial-success mode — either all handlers succeed or the step fails.
+
+Parallel steps support `.withRetry()` — the entire parallel group is retried as a unit.

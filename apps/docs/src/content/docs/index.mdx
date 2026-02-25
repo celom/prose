@@ -1,0 +1,83 @@
+---
+title: Flume
+description: Declarative workflow DSL for orchestrating complex business operations in TypeScript
+template: splash
+hero:
+  tagline: Type-safe workflow pipelines with retries, timeouts, transactions, events, and observability — using plain async/await with zero dependencies.
+  actions:
+    - text: Get Started
+      link: /flume/getting-started/
+      icon: right-arrow
+      variant: primary
+    - text: View on GitHub
+      link: https://github.com/celom/flume
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+## Features
+
+<CardGrid stagger>
+  <Card title="Type-safe State Threading" icon="approve-check">
+    Each step's return type merges into `ctx.state`, giving full autocomplete and compile-time checks across the entire pipeline.
+  </Card>
+  <Card title="Zero Dependencies" icon="rocket">
+    Runs in-process with no external infrastructure. Just `async`/`await`.
+  </Card>
+  <Card title="Retries & Backoff" icon="random">
+    Per-step retry policies with exponential backoff, delay caps, and conditional predicates.
+  </Card>
+  <Card title="Timeouts & Cancellation" icon="warning">
+    Flow-level and step-level timeouts backed by `AbortSignal` with cooperative cancellation.
+  </Card>
+  <Card title="Database Transactions" icon="document">
+    Wrap steps in `db.transaction()` — works with Drizzle, Knex, Prisma, or any ORM.
+  </Card>
+  <Card title="Event Publishing" icon="forward-slash">
+    Emit domain events to named channels with automatic correlation IDs.
+  </Card>
+  <Card title="Parallel Execution" icon="list-format">
+    Run independent steps concurrently with configurable merge strategies.
+  </Card>
+  <Card title="Observability Hooks" icon="magnifier">
+    Plug in logging, metrics, or tracing through the observer interface.
+  </Card>
+</CardGrid>
+
+## Quick Example
+
+```typescript
+import { createFlow, ValidationError } from '@celom/flume';
+
+const onboardUser = createFlow<{ email: string; name: string }>('onboard-user')
+  .validate('checkEmail', (ctx) => {
+    if (!ctx.input.email.includes('@'))
+      throw ValidationError.single('email', 'Invalid email');
+  })
+  .step('createAccount', async (ctx) => {
+    const user = await db.createUser(ctx.input);
+    return { user };
+  })
+  .withRetry({ maxAttempts: 3, delayMs: 200, backoffMultiplier: 2 })
+  .step('sendWelcome', async (ctx) => {
+    await mailer.send(ctx.state.user.email, 'Welcome!');
+  })
+  .event('users', (ctx) => ({
+    eventType: 'user.onboarded',
+    userId: ctx.state.user.id,
+  }))
+  .build();
+
+const result = await onboardUser.execute(
+  { email: 'alice@example.com', name: 'Alice' },
+  { db, eventPublisher }
+);
+```
+
+## Install
+
+```bash
+npm install @celom/flume
+```

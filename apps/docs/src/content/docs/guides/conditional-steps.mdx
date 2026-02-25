@@ -1,0 +1,63 @@
+---
+title: Conditional Steps & Early Exit
+description: Skip steps based on runtime conditions or short-circuit the flow entirely.
+sidebar:
+  order: 3
+---
+
+## Conditional steps with `stepIf`
+
+`stepIf` runs the handler only when the condition returns `true`. Skipped steps don't affect state and don't consume retry attempts.
+
+```typescript
+flow
+  .step('checkCache', (ctx) => {
+    return { cached: cache.has(ctx.input.key) };
+  })
+  .stepIf('fromCache', (ctx) => ctx.state.cached, (ctx) => {
+    return { value: cache.get(ctx.input.key) };
+  })
+  .stepIf('fromDb', (ctx) => !ctx.state.cached, async (ctx) => {
+    return { value: await db.get(ctx.input.key) };
+  })
+```
+
+Skipped steps trigger the `onStepSkipped` observer hook if an observer is attached.
+
+## Early exit with `breakIf`
+
+`breakIf` short-circuits the flow, skipping all remaining steps **and** the `.map()` transformer. This is useful for early returns when further processing is unnecessary.
+
+```typescript
+flow
+  .step('findUser', async (ctx) => {
+    const existing = await db.findByEmail(ctx.input.email);
+    return { existing };
+  })
+  .breakIf(
+    (ctx) => ctx.state.existing != null,
+    (ctx) => ({ user: ctx.state.existing, created: false })
+  )
+  .step('createUser', async (ctx) => {
+    const user = await db.createUser(ctx.input);
+    return { user };
+  })
+  .map((input, state) => ({ user: state.user, created: true }))
+  .build();
+```
+
+### How `breakIf` works
+
+1. The **first argument** is the condition — if it returns `true`, the flow exits early
+2. The **second argument** (optional) defines the return value — this is what `.execute()` resolves to when the break triggers
+3. If no return value is provided, the current accumulated state is returned
+4. The `.map()` transformer is **skipped** when a break occurs
+
+### Type safety
+
+The return type of `.execute()` is a union of the normal output and all possible break outputs. TypeScript tracks this automatically.
+
+```typescript
+const result = await flow.execute(input, deps);
+// result: { user: User; created: true } | { user: User; created: false }
+```

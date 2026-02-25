@@ -1,0 +1,64 @@
+---
+title: Event Publishing
+description: Emit domain events to named channels with automatic correlation IDs.
+sidebar:
+  order: 5
+---
+
+Flume lets you publish domain events as part of your flow, keeping event emission co-located with the business logic that produces them.
+
+## Single event
+
+```typescript
+flow.event('orders', (ctx) => ({
+  eventType: 'order.created',
+  orderId: ctx.state.orderId,
+}));
+```
+
+## Multiple events
+
+Publish multiple events to the same channel in one step:
+
+```typescript
+flow.events('notifications', [
+  (ctx) => ({ eventType: 'email.send', to: ctx.input.email }),
+  (ctx) => ({ eventType: 'sms.send', to: ctx.input.phone }),
+]);
+```
+
+## FlowEventPublisher interface
+
+Event steps require an `eventPublisher` property in your dependencies:
+
+```typescript
+interface FlowEventPublisher {
+  publish(channel: string, event: FlowEvent): Promise<void> | void;
+}
+```
+
+The `FlowEvent` object your builder returns is automatically enriched with a `correlationId` from the flow's metadata.
+
+## Example implementation
+
+```typescript
+const eventPublisher: FlowEventPublisher = {
+  async publish(channel, event) {
+    await redis.publish(channel, JSON.stringify(event));
+  },
+};
+
+await flow.execute(input, { db, eventPublisher });
+```
+
+## Missing event publisher
+
+By default, if an event step runs but no `eventPublisher` dependency is provided, Flume throws an error. You can change this to a warning:
+
+```typescript
+await flow.execute(input, deps, {
+  errorHandling: {
+    throwOnMissingEventPublisher: false,
+  },
+});
+```

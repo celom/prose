@@ -1,0 +1,62 @@
+---
+title: Database Transactions
+description: Wrap steps in database transactions with any ORM.
+sidebar:
+  order: 4
+---
+
+Use `.transaction()` to wrap a step in `db.transaction()`. The transaction client is passed as the second argument to the handler.
+
+```typescript
+flow.transaction('persist', async (ctx, tx) => {
+  const id = await tx.insert('users', { name: ctx.input.name });
+  return { userId: id };
+});
+```
+
+## DatabaseClient interface
+
+Transaction steps require a `db` property in your dependencies conforming to:
+
+```typescript
+interface DatabaseClient {
+  transaction<T>(fn: (tx: TransactionClient) => Promise<T>): Promise<T>;
+}
+```
+
+This works with **Drizzle**, **Knex**, **Prisma**, or any ORM that exposes a `transaction()` method.
+
+## Example with Drizzle
+
+```typescript
+import { drizzle } from 'drizzle-orm/node-postgres';
+
+const db = drizzle(pool);
+
+const flow = createFlow<{ name: string; email: string }>('create-user')
+  .transaction('insert', async (ctx, tx) => {
+    const [user] = await tx.insert(users).values({
+      name: ctx.input.name,
+      email: ctx.input.email,
+    }).returning();
+    return { user };
+  })
+  .build();
+
+await flow.execute(
+  { name: 'Alice', email: 'alice@example.com' },
+  { db }
+);
+```
+
+## Missing database dependency
+
+By default, if a transaction step runs but no `db` dependency is provided, Flume throws an error. You can change this to a warning:
+
+```typescript
+await flow.execute(input, deps, {
+  errorHandling: {
+    throwOnMissingDatabase: false, // warn instead of throwing
+  },
+});
+```

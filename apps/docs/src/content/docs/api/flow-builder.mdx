@@ -1,0 +1,155 @@
+---
+title: FlowBuilder
+description: API reference for all FlowBuilder methods.
+sidebar:
+  order: 2
+---
+
+The `FlowBuilder` is the main API for defining flows. It provides a fluent interface — each method returns a new builder with updated types.
+
+## Steps
+
+### `.step(name, handler)`
+
+Add a regular step. The handler receives `FlowContext` and can return an object to merge into state.
+
+```typescript
+.step('fetchOrder', async (ctx) => {
+  const order = await db.getOrder(ctx.input.orderId);
+  return { order };
+})
+```
+
+### `.validate(name, handler)`
+
+Add a validation step. Runs before processing and is **never retried**. Throw `ValidationError` to fail fast.
+
+```typescript
+.validate('checkInput', (ctx) => {
+  if (ctx.input.amount <= 0)
+    throw ValidationError.single('amount', 'Must be positive');
+})
+```
+
+### `.stepIf(name, condition, handler)`
+
+Add a conditional step. The handler only runs when `condition(ctx)` returns `true`. Skipped steps don't affect state.
+
+```typescript
+.stepIf('sendSms', (ctx) => ctx.input.phone != null, async (ctx) => {
+  await sms.send(ctx.input.phone, 'Hello!');
+})
+```
+
+### `.transaction(name, handler)`
+
+Wrap a step in `db.transaction()`. The handler receives `(ctx, tx)` where `tx` is the transaction client.
+
+```typescript
+.transaction('persist', async (ctx, tx) => {
+  const id = await tx.insert('users', ctx.input);
+  return { userId: id };
+})
+```
+
+Requires a `db` dependency conforming to the `DatabaseClient` interface.
+
+### `.parallel(name, strategy, ...handlers)`
+
+Run multiple handlers concurrently and merge results into state.
+
+```typescript
+.parallel('fetchAll', 'deep',
+  async (ctx) => ({ users: await fetchUsers() }),
+  async (ctx) => ({ posts: await fetchPosts() }),
+)
+```
+
+**Merge strategies:** `'shallow'`, `'error-on-conflict'`, `'deep'`
+
+## Events
+
+### `.event(channel, builder)`
+
+Publish a single event to a named channel.
+
+```typescript
+.event('orders', (ctx) => ({
+  eventType: 'order.created',
+  orderId: ctx.state.orderId,
+}))
+```
+
+### `.events(channel, builders)`
+
+Publish multiple events to a channel in one step.
+
+```typescript
+.events('notifications', [
+  (ctx) => ({ eventType: 'email.send', to: ctx.input.email }),
+  (ctx) => ({ eventType: 'sms.send', to: ctx.input.phone }),
+])
+```
+
+## Flow control
+
+### `.breakIf(condition, returnValue?)`
+
+Short-circuit the flow. If `condition(ctx)` returns `true`, all remaining steps and `.map()` are skipped.
+
+```typescript
+.breakIf(
+  (ctx) => ctx.state.existing != null,
+  (ctx) => ({ user: ctx.state.existing, created: false })
+)
+```
+
+### `.withRetry(options)`
+
+Add a retry policy to the **last** step. See [Retries guide](/flume/guides/retries/) for full options.
+
+```typescript
+.withRetry({
+  maxAttempts: 3,
+  delayMs: 200,
+  backoffMultiplier: 2,
+})
+```
+
+## Composition
+
+### `.pipe(fn)`
+
+Apply a builder transformation function. Used for reusable sub-flows.
+
+```typescript
+.pipe(withAuth)
+.pipe(withAuditLog)
+```
+
+See [Sub-flows guide](/flume/guides/sub-flows/) for details.
+
+### `.map(mapper)`
+
+Transform the final accumulated state into a custom output shape. Receives `(input, state)`.
+
+```typescript
+.map((input, state) => ({
+  id: state.user.id,
+  displayName: state.user.name,
+}))
+```
+
+## Build
+
+### `.build()`
+
+Create an executable `FlowDefinition`. Returns an object with an `.execute()` method.
+
+```typescript
+const flow = createFlow<Input>('name')
+  .step(...)
+  .build();
+
+const result = await flow.execute(input, deps, options?);
+```

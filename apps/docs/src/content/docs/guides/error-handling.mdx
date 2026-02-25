@@ -1,0 +1,104 @@
+---
+title: Error Handling
+description: Handle errors with typed error classes, partial state recovery, and configurable behavior.
+sidebar:
+  order: 9
+---
+
+## Error types
+
+Flume provides three error classes for different failure modes.
+
+### `FlowExecutionError`
+
+Thrown when a step fails during execution. Wraps the original error with context.
+
+```typescript
+import { FlowExecutionError } from '@celom/flume';
+
+try {
+  await flow.execute(input, deps);
+} catch (err) {
+  if (err instanceof FlowExecutionError) {
+    err.flowName;      // 'process-order'
+    err.stepName;      // 'charge'
+    err.originalError; // the actual error thrown by the step
+  }
+}
+```
+
+### `ValidationError`
+
+Thrown by `.validate()` steps for input validation failures. Carries field-level details.
+
+```typescript
+import { ValidationError } from '@celom/flume';
+
+// Single field
+throw ValidationError.single('email', 'Invalid email');
+
+// Multiple fields
+throw new ValidationError('Validation failed', [
+  { field: 'email', message: 'Required' },
+  { field: 'age', message: 'Must be at least 18' },
+]);
+```
+
+`ValidationError` has an `.issues` property with an array of `{ field, message }` objects and a `.toJSON()` method for serialization.
+
+### `TimeoutError`
+
+Thrown when a flow or step exceeds its configured timeout.
+
+```typescript
+import { TimeoutError } from '@celom/flume';
+
+try {
+  await flow.execute(input, deps, { timeout: 5_000 });
+} catch (err) {
+  if (err instanceof TimeoutError) {
+    err.flowName;   // 'process-order'
+    err.stepName;   // step that timed out (or undefined for flow timeout)
+    err.timeoutMs;  // 5000
+  }
+}
+```
+
+## Catching errors
+
+Use `instanceof` to distinguish between error types:
+
+```typescript
+try {
+  await flow.execute(input, deps);
+} catch (err) {
+  if (err instanceof ValidationError) {
+    // Fail-fast validation — err.issues has field-level details
+  } else if (err instanceof TimeoutError) {
+    // Flow or step exceeded its timeout
+  } else if (err instanceof FlowExecutionError) {
+    // Step execution failure
+  }
+}
+```
+
+## Partial state recovery
+
+Set `throwOnError: false` to return partial state instead of throwing. The flow runs as far as it can, and the accumulated state up to the failing step is returned.
+
+```typescript
+const result = await flow.execute(input, deps, { throwOnError: false });
+```
+
+## Missing dependency handling
+
+Control behavior when optional dependencies (`db`, `eventPublisher`) are not provided:
+
+```typescript
+await flow.execute(input, deps, {
+  errorHandling: {
+    throwOnMissingDatabase: false,        // warn instead of throwing
+    throwOnMissingEventPublisher: false,   // warn instead of throwing
+  },
+});
+```

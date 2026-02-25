@@ -1,0 +1,79 @@
+---
+title: Error Types
+description: API reference for FlowExecutionError, ValidationError, and TimeoutError.
+sidebar:
+  order: 4
+---
+
+Flume exports three error classes, all extending `Error`.
+
+## `ValidationError`
+
+Thrown by `.validate()` steps for input validation failures.
+
+### Constructor
+
+```typescript
+new ValidationError(message: string, issues?: ValidationIssue[])
+```
+
+### Static helpers
+
+```typescript
+ValidationError.single(field: string, message: string): ValidationError
+ValidationError.multiple(issues: ValidationIssue[]): ValidationError
+```
+
+### Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `message` | `string` | Error message |
+| `issues` | `ValidationIssue[]` | Array of `{ field, message }` objects |
+
+### Methods
+
+- `.toJSON()` — Returns a serializable representation with message and issues
+
+### Example
+
+```typescript
+// Single field
+throw ValidationError.single('email', 'Invalid email');
+
+// Multiple fields
+throw new ValidationError('Validation failed', [
+  { field: 'email', message: 'Required' },
+  { field: 'age', message: 'Must be at least 18' },
+]);
+```
+
+## `FlowExecutionError`
+
+Thrown when a step fails during execution. Wraps the original error.
+
+### Constructor
+
+```typescript
+new FlowExecutionError(flowName: string, stepName: string, originalError: Error)
+```
+
+### Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `flowName` | `string` | Name of the flow |
+| `stepName` | `string` | Name of the step that failed |
+| `originalError` | `Error` | The actual error thrown by the step |
+
+## `TimeoutError`
+
+Thrown when a flow or step exceeds its configured timeout.
+
+### Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `flowName` | `string` | Name of the flow |
+| `stepName` | `string \| undefined` | Step name (undefined for flow-level timeout) |
+| `timeoutMs` | `number` | The timeout value that was exceeded |

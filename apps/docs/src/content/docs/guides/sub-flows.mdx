@@ -1,0 +1,77 @@
+---
+title: Sub-flows with .pipe()
+description: Extract and reuse step sequences as composable functions.
+sidebar:
+  order: 7
+---
+
+`.pipe()` lets you extract reusable step sequences as plain functions and compose them into flows. This is how you build shared middleware-like patterns (authentication, audit logging, etc.) without code duplication.
+
+## Basic usage
+
+```typescript
+function withAuth(builder) {
+  return builder
+    .step('validateToken', async (ctx) => {
+      const session = await auth.verify(ctx.input.token);
+      return { session };
+    })
+    .step('loadUser', async (ctx) => {
+      const user = await db.getUser(ctx.state.session.userId);
+      return { user };
+    });
+}
+
+const flow = createFlow<{ token: string }>('protected-action')
+  .pipe(withAuth)
+  .step('doAction', (ctx) => {
+    // ctx.state.user is fully typed here
+    return { result: `Hello, ${ctx.state.user.name}` };
+  })
+  .build();
+```
+
+## How it works
+
+`.pipe()` takes a function that receives the current builder and returns a new builder with additional steps. The function signature is:
+
+```typescript
+(builder: FlowBuilder<...>) => FlowBuilder<...>
+```
+
+The returned builder's state type is automatically merged — downstream steps see all state from the piped function.
+
+## Composing multiple sub-flows
+
+Chain multiple `.pipe()` calls to layer behaviors:
+
+```typescript
+const flow = createFlow<{ token: string; orderId: string }>('admin-action')
+  .pipe(withAuth)
+  .pipe(withAuditLog)
+  .step('process', async (ctx) => {
+    // has ctx.state.user from withAuth
+    // has ctx.state.auditId from withAuditLog
+  })
+  .build();
+```
+
+## Why functions, not classes
+
+Sub-flows are plain functions, not special objects. This makes them easy to test, compose, and type. You can parameterize them like any other function:
+
+```typescript
+function withRetryableApiCall(url: string) {
+  return (builder) =>
+    builder
+      .step('apiCall', async (ctx) => {
+        const data = await fetch(url, { signal: ctx.signal }).then(r => r.json());
+        return { apiData: data };
+      })
+      .withRetry({ maxAttempts: 3, delayMs: 500 });
+}
+
+const flow = createFlow<{}>('fetch-data')
+  .pipe(withRetryableApiCall('https://api.example.com/data'))
+  .build();
+```

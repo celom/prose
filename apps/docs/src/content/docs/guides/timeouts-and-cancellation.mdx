@@ -1,0 +1,94 @@
+---
+title: Timeouts & Cancellation
+description: Set flow-level and step-level timeouts, and cancel running flows with AbortSignal.
+sidebar:
+  order: 2
+---
+
+Flume supports three layers of timeout and cancellation, all backed by `AbortSignal`.
+
+## Flow timeout
+
+Set a maximum duration for the entire flow.
+
+```typescript
+await flow.execute(input, deps, {
+  timeout: 30_000, // abort if the flow exceeds 30 seconds
+});
+```
+
+If the timeout is reached, a `TimeoutError` is thrown with the flow name and timeout value.
+
+## Step timeout
+
+Set a default maximum duration for each step.
+
+```typescript
+await flow.execute(input, deps, {
+  stepTimeout: 5_000, // abort any step that exceeds 5 seconds
+});
+```
+
+You can also override the step timeout for a specific step via `.withRetry()`:
+
+```typescript
+flow
+  .step('slowOperation', async (ctx) => { /* ... */ })
+  .withRetry({
+    maxAttempts: 1,
+    delayMs: 0,
+    stepTimeout: 15_000, // this step gets 15 seconds
+  })
+```
+
+## External cancellation
+
+Pass an `AbortSignal` to cancel the flow from outside.
+
+```typescript
+const controller = new AbortController();
+
+const promise = flow.execute(input, deps, {
+  signal: controller.signal,
+});
+
+// Cancel from outside
+controller.abort();
+```
+
+## Cooperative cancellation with `ctx.signal`
+
+Inside step handlers, `ctx.signal` exposes a combined signal that fires when any of the three layers trigger. Pass it to async operations for true interruption.
+
+```typescript
+flow.step('fetchData', async (ctx) => {
+  // Pass signal to fetch for real cancellation
+  const resp = await fetch(url, { signal: ctx.signal });
+  return { data: await resp.json() };
+});
+```
+
+You can also check `ctx.signal.aborted` for cooperative cancellation in long-running loops:
+
+```typescript
+flow.step('processItems', async (ctx) => {
+  for (const item of ctx.state.items) {
+    if (ctx.signal.aborted) break;
+    await processItem(item);
+  }
+});
+```
+
+## Combining all three
+
+All three layers work together. The combined signal fires as soon as any one triggers.
+
+```typescript
+const controller = new AbortController();
+
+await flow.execute(input, deps, {
+  timeout: 30_000,
+  stepTimeout: 5_000,
+  signal: controller.signal,
+});
+```

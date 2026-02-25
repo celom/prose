@@ -1,0 +1,82 @@
+---
+title: Retries
+description: Add per-step retry policies with exponential backoff to handle transient failures.
+sidebar:
+  order: 1
+---
+
+Chain `.withRetry()` after any step to add a retry policy. This is ideal for steps that call external APIs or services where transient failures are expected.
+
+```typescript
+flow
+  .step('callExternalApi', async (ctx) => {
+    const data = await api.fetch(ctx.input.url);
+    return { data };
+  })
+  .withRetry({
+    maxAttempts: 5,
+    delayMs: 100,
+    backoffMultiplier: 2,
+    maxDelayMs: 5_000,
+    shouldRetry: (err) => err.status !== 400,
+    stepTimeout: 10_000,
+  })
+```
+
+## Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `maxAttempts` | `number` | — | Total attempts including the first |
+| `delayMs` | `number` | — | Initial delay between retries (ms) |
+| `backoffMultiplier` | `number` | `1` | Multiplier applied to delay after each retry |
+| `maxDelayMs` | `number` | `Infinity` | Upper bound on delay |
+| `shouldRetry` | `(error) => boolean` | — | Predicate to conditionally retry |
+| `stepTimeout` | `number` | — | Timeout override for this step (ms) |
+
+## Exponential backoff
+
+With `backoffMultiplier: 2` and `delayMs: 100`, retries wait 100ms, 200ms, 400ms, 800ms, etc. Use `maxDelayMs` to cap the delay.
+
+```typescript
+.withRetry({
+  maxAttempts: 5,
+  delayMs: 100,
+  backoffMultiplier: 2,
+  maxDelayMs: 5_000, // never wait more than 5 seconds
+})
+```
+
+## Conditional retries
+
+Use `shouldRetry` to skip retries for non-transient errors like validation failures or 4xx HTTP responses.
+
+```typescript
+.withRetry({
+  maxAttempts: 3,
+  delayMs: 500,
+  shouldRetry: (err) => {
+    // Don't retry client errors
+    if (err.status >= 400 && err.status < 500) return false;
+    return true;
+  },
+})
+```
+
+## Observing retries
+
+When using an [observer](/flume/guides/observability/), the `onStepRetry` hook is called before each retry attempt:
+
+```typescript
+await flow.execute(input, deps, {
+  observer: {
+    onStepRetry: (stepName, attempt, maxAttempts, error) => {
+      console.log(`Retrying ${stepName}: attempt ${attempt}/${maxAttempts}`);
+    },
+  },
+});
+```
+
+## Validation steps are never retried
+
+Steps added with `.validate()` are never retried, even if `.withRetry()` is chained after them. Validation failures should fail fast.
