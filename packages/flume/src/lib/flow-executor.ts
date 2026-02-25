@@ -99,7 +99,7 @@ export class FlowExecutor<
 
         // Handle break step type - short-circuits the flow if condition is met
         if (step.type === 'break') {
-          const breakStep = step as BreakStepDefinition<TInput, TDeps, TState>;
+          const breakStep = step;
           const stepStart = Date.now();
 
           observer?.onStepStart?.(step.name, context);

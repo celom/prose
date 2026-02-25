@@ -11,7 +11,6 @@ import type {
   RetryOptions,
   FlowState,
   BaseFlowDependencies,
-  BreakStepDefinition,
   FlowEvent,
 } from './types.js';
 import { FlowExecutor } from './flow-executor.js';
