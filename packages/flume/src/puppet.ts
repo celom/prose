@@ -6,6 +6,7 @@
  */
 
 import { createFlow } from './lib/flow-factories.js';
+import type { FlowBuilder } from './lib/flow-builder.js';
 import type { BaseFlowDependencies } from './lib/types.js';
 
 // ── Setup ────────────────────────────────────────────────
@@ -136,6 +137,29 @@ const parallelFlow = createFlow<{ orgId: string }, FetchDeps>('parallelFetch')
   })
   .build();
 
+// ── Pipe for reusable sub-flows ─────────────────────────
+
+function withAuth<
+  TInput extends { token: string },
+  TDeps extends BaseFlowDependencies,
+  TState extends Record<string, unknown>,
+>(builder: FlowBuilder<TInput, TDeps, TState>) {
+  return builder
+    .step('validateToken', (ctx) => ({ tokenData: { sub: ctx.input.token } }))
+    .step('loadUser', (ctx) => ({ user: { id: ctx.state.tokenData.sub, role: 'admin' as const } }));
+}
+
+const authedFlow = createFlow<{ token: string; action: string }, never>('authed-action')
+  .pipe(withAuth)
+  .step('doAction', (ctx) => {
+    // State should have tokenData and user from the piped sub-flow
+    void (ctx.state.tokenData.sub satisfies string);
+    void (ctx.state.user.id satisfies string);
+    void (ctx.state.user.role satisfies 'admin');
+    return { actionDone: true as const };
+  })
+  .build();
+
 // ── Parallel chained with subsequent steps ──────────────
 
 const combinedFlow = createFlow<{ id: string }, never>('combined')
@@ -214,5 +238,6 @@ void branchA;
 void branchB;
 void cachedLookup;
 void parallelFlow;
+void authedFlow;
 void combinedFlow;
 void _typeAssertions;

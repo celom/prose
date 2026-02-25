@@ -805,6 +805,65 @@ describe('Workflow Library', () => {
     });
   });
 
+  describe('Builder .pipe() method', () => {
+    function withSetup(
+      builder: ReturnType<typeof createFlow<Record<string, never>, EmptyDeps>>,
+    ) {
+      return builder
+        .step('setupA', () => ({ a: 1 }))
+        .step('setupB', () => ({ b: 2 }));
+    }
+
+    it('should apply a builder-to-builder transformation', async () => {
+      const flow = createFlow<Record<string, never>, EmptyDeps>('pipe-test')
+        .pipe(withSetup)
+        .build();
+
+      const result = await flow.execute({}, {});
+
+      expect(result).toEqual({ a: 1, b: 2 });
+    });
+
+    it('should preserve state for steps after pipe', async () => {
+      const flow = createFlow<Record<string, never>, EmptyDeps>('pipe-chain')
+        .pipe(withSetup)
+        .step('sum', (ctx) => ({ total: ctx.state.a + ctx.state.b }))
+        .build();
+
+      const result = await flow.execute({}, {});
+
+      expect(result).toEqual({ a: 1, b: 2, total: 3 });
+    });
+
+    it('should compose multiple pipes', async () => {
+      function withExtra(
+        builder: ReturnType<typeof withSetup>,
+      ) {
+        return builder.step('extra', () => ({ c: 3 }));
+      }
+
+      const flow = createFlow<Record<string, never>, EmptyDeps>('multi-pipe')
+        .pipe(withSetup)
+        .pipe(withExtra)
+        .build();
+
+      const result = await flow.execute({}, {});
+
+      expect(result).toEqual({ a: 1, b: 2, c: 3 });
+    });
+
+    it('should work with steps before pipe', async () => {
+      const flow = createFlow<Record<string, never>, EmptyDeps>('pre-pipe')
+        .step('init', () => ({ init: true }))
+        .pipe((b) => b.step('piped', () => ({ piped: true })))
+        .build();
+
+      const result = await flow.execute({}, {});
+
+      expect(result).toEqual({ init: true, piped: true });
+    });
+  });
+
   describe('Observer Hooks', () => {
     it('should call onFlowStart when flow begins', async () => {
       const observer = {

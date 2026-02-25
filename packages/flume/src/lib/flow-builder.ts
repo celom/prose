@@ -325,6 +325,25 @@ export class FlowBuilder<
   }
 
   /**
+   * Apply a builder-to-builder transformation, enabling reusable sub-flows.
+   *
+   * @example
+   * function withAuth(builder) {
+   *   return builder
+   *     .step('validateToken', ...)
+   *     .step('loadUser', ...);
+   * }
+   *
+   * createFlow('order')
+   *   .pipe(withAuth)
+   *   .step('createOrder', ...)
+   *   .build();
+   */
+  pipe<R>(fn: (builder: this) => R): R {
+    return fn(this);
+  }
+
+  /**
    * Transform the accumulated state into the final output
    */
   map<TNewOutput>(
