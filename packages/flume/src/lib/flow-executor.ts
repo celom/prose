@@ -20,20 +20,72 @@ import type {
 } from './types.js';
 
 /**
- * Wraps a promise with a timeout using Promise.race
- * This actually interrupts the wait (though the underlying operation may continue)
+ * Throws if the signal is already aborted.
+ * When the abort was caused by a TimeoutError, re-throws the original error.
  */
-function withTimeout<T>(
-  promise: Promise<T>,
-  timeoutMs: number,
-  errorFactory: () => Error,
-): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) => {
-      setTimeout(() => reject(errorFactory()), timeoutMs);
-    }),
-  ]);
+function throwIfAborted(signal: AbortSignal): void {
+  if (signal.aborted) {
+    if (signal.reason instanceof Error) {
+      throw signal.reason;
+    }
+    throw new Error('Flow execution was aborted');
+  }
+}
+
+/**
+ * Races a promise against an AbortSignal.
+ * If the signal fires before the promise settles, rejects with the signal's reason.
+ */
+function raceAbort<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) {
+    return Promise.reject(
+      signal.reason instanceof Error ? signal.reason : new Error('Aborted'),
+    );
+  }
+
+  return new Promise<T>((resolve, reject) => {
+    function onAbort() {
+      reject(signal.reason instanceof Error ? signal.reason : new Error('Aborted'));
+    }
+
+    signal.addEventListener('abort', onAbort, { once: true });
+
+    promise.then(
+      (value) => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(value);
+      },
+      (error) => {
+        signal.removeEventListener('abort', onAbort);
+        reject(error);
+      },
+    );
+  });
+}
+
+/**
+ * Returns a promise that resolves after `ms` milliseconds,
+ * but rejects immediately if the signal is aborted.
+ */
+function abortableDelay(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    if (signal.aborted) {
+      reject(signal.reason instanceof Error ? signal.reason : new Error('Aborted'));
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+
+    function onAbort() {
+      clearTimeout(timer);
+      reject(signal.reason instanceof Error ? signal.reason : new Error('Aborted'));
+    }
+
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
 }
 
 export class FlowExecutor<
@@ -60,12 +112,38 @@ export class FlowExecutor<
 
     const observer = options?.observer;
 
+    // Create the flow-level AbortController
+    const flowController = new AbortController();
+
+    // Combine with external signal if provided
+    const flowSignal = options?.signal
+      ? AbortSignal.any([options.signal, flowController.signal])
+      : flowController.signal;
+
+    // Wire flow-level timeout to abort
+    let flowTimer: ReturnType<typeof setTimeout> | undefined;
+    if (options?.timeout) {
+      flowTimer = setTimeout(
+        () =>
+          flowController.abort(
+            new TimeoutError(
+              `Flow execution timeout after ${options.timeout}ms`,
+              config.name,
+              undefined,
+              options.timeout,
+            ),
+          ),
+        options.timeout,
+      );
+    }
+
     // Initialize context
     let context: FlowContext<TInput, TDeps, TState> = {
       input: Object.freeze(input),
       state: {} as TState,
       deps,
       meta,
+      signal: flowSignal,
     };
 
     // Notify observer of flow start
@@ -74,18 +152,8 @@ export class FlowExecutor<
     try {
       // Execute each step in sequence
       for (const step of config.steps) {
-        // Check flow-level timeout if configured (pre-step check)
-        if (options?.timeout) {
-          const elapsed = Date.now() - startTime;
-          if (elapsed > options.timeout) {
-            throw new TimeoutError(
-              `Flow execution timeout after ${elapsed}ms (limit: ${options.timeout}ms)`,
-              config.name,
-              step.name,
-              options.timeout,
-            );
-          }
-        }
+        // Check if flow has been aborted before starting next step
+        throwIfAborted(flowSignal);
 
         // Update current step in meta
         context.meta.currentStep = step.name;
@@ -137,7 +205,7 @@ export class FlowExecutor<
         }
 
         // Execute step based on type
-        const result = await this.executeStep(step, context, deps, options);
+        const result = await this.executeStep(step, context, deps, options, flowSignal);
 
         // Merge result into state if applicable
         if (result && typeof result === 'object' && step.type !== 'event') {
@@ -164,6 +232,13 @@ export class FlowExecutor<
 
       // By default, re-throw the original error
       throw error;
+    } finally {
+      // Clean up flow-level timer
+      if (flowTimer !== undefined) {
+        clearTimeout(flowTimer);
+      }
+      // Abort any in-flight work (no-op if already aborted)
+      flowController.abort();
     }
   }
 
@@ -174,15 +249,16 @@ export class FlowExecutor<
     step: StepDefinition<TInput, TDeps, TState>,
     context: FlowContext<TInput, TDeps, TState>,
     deps: TDeps,
-    options?: FlowExecutionOptions<TInput, TDeps, TState>,
+    options: FlowExecutionOptions<TInput, TDeps, TState> | undefined,
+    flowSignal: AbortSignal,
   ) {
     const retryOptions = step.retryOptions;
 
     if (retryOptions) {
-      return this.executeWithRetry(step, context, deps, retryOptions, options);
+      return this.executeWithRetry(step, context, deps, retryOptions, options, flowSignal);
     }
 
-    return this.executeSingleStep(step, context, deps, options);
+    return this.executeSingleStep(step, context, deps, options, flowSignal);
   }
 
   /**
@@ -193,15 +269,19 @@ export class FlowExecutor<
     context: FlowContext<TInput, TDeps, TState>,
     deps: TDeps,
     retryOptions: RetryOptions,
-    options?: FlowExecutionOptions<TInput, TDeps, TState>,
+    options: FlowExecutionOptions<TInput, TDeps, TState> | undefined,
+    flowSignal: AbortSignal,
   ) {
     const observer = options?.observer;
     let lastError: Error | undefined;
     let delay = retryOptions.delayMs;
 
     for (let attempt = 1; attempt <= retryOptions.maxAttempts; attempt++) {
+      // Check abort before each attempt
+      throwIfAborted(flowSignal);
+
       try {
-        return await this.executeSingleStep(step, context, deps, options);
+        return await this.executeSingleStep(step, context, deps, options, flowSignal);
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
 
@@ -228,8 +308,8 @@ export class FlowExecutor<
           lastError,
         );
 
-        // Wait before retrying
-        await new Promise((resolve) => setTimeout(resolve, delay));
+        // Wait before retrying (abortable — exits immediately if signal fires)
+        await abortableDelay(delay, flowSignal);
 
         // Calculate next delay with backoff
         if (retryOptions.backoffMultiplier) {
@@ -251,7 +331,8 @@ export class FlowExecutor<
     step: StepDefinition<TInput, TDeps, TState>,
     context: FlowContext<TInput, TDeps, TState>,
     deps: TDeps,
-    options?: FlowExecutionOptions<TInput, TDeps, TState>,
+    options: FlowExecutionOptions<TInput, TDeps, TState> | undefined,
+    flowSignal: AbortSignal,
   ) {
     const observer = options?.observer;
     const stepStart = Date.now();
@@ -260,27 +341,51 @@ export class FlowExecutor<
     // Notify observer of step start
     observer?.onStepStart?.(step.name, context);
 
-    try {
-      let result;
+    // Create per-step abort controller for step-level timeout
+    let stepController: AbortController | undefined;
+    let stepTimer: ReturnType<typeof setTimeout> | undefined;
+    let stepContext = context;
 
+    if (stepTimeout) {
+      stepController = new AbortController();
+      const stepSignal = AbortSignal.any([flowSignal, stepController.signal]);
+
+      // Give the step handler a signal scoped to this step's lifetime
+      stepContext = { ...context, signal: stepSignal };
+
+      stepTimer = setTimeout(
+        () =>
+          stepController!.abort(
+            new TimeoutError(
+              `Step '${step.name}' timed out after ${stepTimeout}ms`,
+              context.meta.flowName,
+              step.name,
+              stepTimeout,
+            ),
+          ),
+        stepTimeout,
+      );
+    }
+
+    try {
       // Create the step execution promise
       const executeStep = async () => {
         switch (step.type) {
           case 'validate': {
-            await step.handler(context);
+            await step.handler(stepContext);
             return undefined;
           }
 
           case 'step': {
-            return await step.handler(context);
+            return await step.handler(stepContext);
           }
 
           case 'transaction': {
-            return await this.executeTransaction(step, context, deps, options);
+            return await this.executeTransaction(step, stepContext, deps, options);
           }
 
           case 'event': {
-            return await this.executeEvent(step, context, options);
+            return await this.executeEvent(step, stepContext, options);
           }
 
           default: {
@@ -292,22 +397,12 @@ export class FlowExecutor<
         }
       };
 
-      // Execute with timeout if configured
-      if (stepTimeout) {
-        result = await withTimeout(
-          executeStep(),
-          stepTimeout,
-          () =>
-            new TimeoutError(
-              `Step '${step.name}' timed out after ${stepTimeout}ms`,
-              context.meta.flowName,
-              step.name,
-              stepTimeout,
-            ),
-        );
-      } else {
-        result = await executeStep();
-      }
+      // Race execution against the signal so timeouts and external aborts
+      // actually interrupt the wait (not just the underlying operation).
+      // We race whenever the signal could fire (step timeout, flow timeout,
+      // or external signal). This is a no-op for the common case where the
+      // signal never aborts.
+      const result = await raceAbort(executeStep(), stepContext.signal);
 
       // Notify observer of step completion
       const duration = Date.now() - stepStart;
@@ -320,6 +415,10 @@ export class FlowExecutor<
       observer?.onStepError?.(step.name, error as Error, duration, context);
 
       throw error;
+    } finally {
+      if (stepTimer !== undefined) {
+        clearTimeout(stepTimer);
+      }
     }
   }
 

@@ -77,6 +77,8 @@ export interface FlowContext<
   state: TState;
   deps: TDeps;
   meta: FlowMeta;
+  /** AbortSignal for cooperative cancellation. Aborted on timeout or external signal. */
+  signal: AbortSignal;
 }
 
 /**
@@ -115,8 +117,10 @@ export interface FlowExecutionOptions<
   throwOnError?: boolean;
   /** Timeout in milliseconds for the entire flow */
   timeout?: number;
-  /** Timeout in milliseconds for individual steps (uses Promise.race to actually interrupt) */
+  /** Timeout in milliseconds for individual steps */
   stepTimeout?: number;
+  /** External AbortSignal for caller-driven cancellation */
+  signal?: AbortSignal;
   observer?: FlowObserver<TInput, TDeps, TState>;
   errorHandling?: ErrorHandlingConfig;
 }

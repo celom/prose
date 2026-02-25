@@ -1319,4 +1319,189 @@ describe('Workflow Library', () => {
       expect(flow.steps[1].type).toBe('break');
     });
   });
+
+  describe('AbortSignal Cancellation', () => {
+    it('should provide an AbortSignal on the context', async () => {
+      let isAbortSignal = false;
+      let wasAbortedDuringExecution = true;
+
+      const flow = createFlow<Record<string, never>, EmptyDeps>('signal-ctx')
+        .step('capture', (ctx) => {
+          isAbortSignal = ctx.signal instanceof AbortSignal;
+          wasAbortedDuringExecution = ctx.signal.aborted;
+          return { ok: true };
+        })
+        .build();
+
+      await flow.execute({}, {});
+
+      expect(isAbortSignal).toBe(true);
+      expect(wasAbortedDuringExecution).toBe(false);
+    });
+
+    it('should abort when external signal is triggered mid-flow', async () => {
+      const controller = new AbortController();
+      const step2Handler = vi.fn().mockReturnValue({ step2: true });
+
+      const flow = createFlow<Record<string, never>, EmptyDeps>('external-abort')
+        .step('step1', async () => {
+          // Abort after this step completes
+          controller.abort();
+          return { step1: true };
+        })
+        .step('step2', step2Handler)
+        .build();
+
+      await expect(
+        flow.execute({}, {}, { signal: controller.signal }),
+      ).rejects.toThrow();
+
+      expect(step2Handler).not.toHaveBeenCalled();
+    });
+
+    it('should reject immediately when signal is already aborted', async () => {
+      const controller = new AbortController();
+      controller.abort();
+
+      const stepHandler = vi.fn().mockReturnValue({ result: true });
+
+      const flow = createFlow<Record<string, never>, EmptyDeps>('pre-aborted')
+        .step('step1', stepHandler)
+        .build();
+
+      await expect(
+        flow.execute({}, {}, { signal: controller.signal }),
+      ).rejects.toThrow();
+
+      expect(stepHandler).not.toHaveBeenCalled();
+    });
+
+    it('should propagate step-scoped signal on step timeout', async () => {
+      let capturedSignal: AbortSignal | undefined;
+
+      const flow = createFlow<Record<string, never>, EmptyDeps>('step-timeout-signal')
+        .step('slow', async (ctx) => {
+          capturedSignal = ctx.signal;
+          await new Promise((resolve) => setTimeout(resolve, 200));
+          return { done: true };
+        })
+        .build();
+
+      await expect(
+        flow.execute({}, {}, { stepTimeout: 20 }),
+      ).rejects.toThrow(TimeoutError);
+
+      // The signal should have been aborted by the step timeout
+      expect(capturedSignal).toBeDefined();
+      expect(capturedSignal!.aborted).toBe(true);
+    });
+
+    it('should still produce TimeoutError for flow-level timeout', async () => {
+      const flow = createFlow<Record<string, never>, EmptyDeps>('flow-timeout-signal')
+        .step('step1', async () => {
+          await new Promise((resolve) => setTimeout(resolve, 30));
+          return { step1: true };
+        })
+        .step('step2', async () => {
+          await new Promise((resolve) => setTimeout(resolve, 30));
+          return { step2: true };
+        })
+        .step('step3', async () => {
+          await new Promise((resolve) => setTimeout(resolve, 30));
+          return { step3: true };
+        })
+        .build();
+
+      await expect(
+        flow.execute({}, {}, { timeout: 50 }),
+      ).rejects.toThrow(TimeoutError);
+    });
+
+    it('should abort retry delay immediately when signal fires', async () => {
+      const controller = new AbortController();
+      let attempts = 0;
+
+      const flow = createFlow<Record<string, never>, EmptyDeps>('abort-retry')
+        .step('retryable', () => {
+          attempts++;
+          if (attempts === 1) {
+            // Abort during the retry delay
+            setTimeout(() => controller.abort(), 5);
+            throw new Error('retry me');
+          }
+          return { ok: true };
+        })
+        .withRetry({ maxAttempts: 3, delayMs: 5000 })
+        .build();
+
+      const start = Date.now();
+      await expect(
+        flow.execute({}, {}, { signal: controller.signal }),
+      ).rejects.toThrow();
+      const duration = Date.now() - start;
+
+      // Should not have waited the full 5000ms retry delay
+      expect(duration).toBeLessThan(200);
+      expect(attempts).toBe(1);
+    });
+
+    it('should provide signal to parallel handlers', async () => {
+      const signals: AbortSignal[] = [];
+
+      const flow = createFlow<Record<string, never>, EmptyDeps>('parallel-signal')
+        .parallel('fetch', 'shallow',
+          (ctx) => {
+            signals.push(ctx.signal);
+            return { a: 1 };
+          },
+          (ctx) => {
+            signals.push(ctx.signal);
+            return { b: 2 };
+          },
+        )
+        .build();
+
+      await flow.execute({}, {});
+
+      expect(signals).toHaveLength(2);
+      expect(signals[0]).toBeInstanceOf(AbortSignal);
+      expect(signals[1]).toBeInstanceOf(AbortSignal);
+    });
+
+    it('should abort the signal on flow-level timeout', async () => {
+      let capturedSignal: AbortSignal | undefined;
+
+      const flow = createFlow<Record<string, never>, EmptyDeps>('flow-abort-signal')
+        .step('slow', async (ctx) => {
+          capturedSignal = ctx.signal;
+          await new Promise((resolve) => setTimeout(resolve, 200));
+          return { done: true };
+        })
+        .build();
+
+      await expect(
+        flow.execute({}, {}, { timeout: 20 }),
+      ).rejects.toThrow(TimeoutError);
+
+      expect(capturedSignal).toBeDefined();
+      expect(capturedSignal!.aborted).toBe(true);
+    });
+
+    it('should respect stepTimeout and interrupt quickly', async () => {
+      const flow = createFlow<Record<string, never>, EmptyDeps>('step-timeout-interrupt')
+        .step('slowStep', async () => {
+          await new Promise((resolve) => setTimeout(resolve, 200));
+          return { slow: true };
+        })
+        .build();
+
+      const start = Date.now();
+      await expect(
+        flow.execute({}, {}, { stepTimeout: 20 }),
+      ).rejects.toThrow(TimeoutError);
+      const duration = Date.now() - start;
+
+      expect(duration).toBeLessThan(80);
+    });
+  });
 });
