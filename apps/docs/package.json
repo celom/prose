@@ -1,7 +1,11 @@
 {
   "name": "@celom/docs",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "author": "Carlos Mimoso",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/celom/flume.git"
+  },
   "private": true,
   "type": "module",
   "scripts": {

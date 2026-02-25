@@ -2,7 +2,28 @@
   "name": "@celom/flume",
   "version": "0.0.1",
   "author": "Carlos Mimoso",
+  "description": "Declarative workflow DSL for orchestrating complex business operations in Javascript/Typescript.",
+  "keywords": [
+    "workflow",
+    "typescript",
+    "pipeline",
+    "async",
+    "dsl",
+    "workflow-engine",
+    "orchestration",
+    "type-safe",
+    "retry",
+    "business-logic",
+    "observability"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/celom/flume.git"
+  },
   "private": false,
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -16,5 +37,9 @@
       "default": "./dist/index.js"
     }
   },
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "dependencies": {}
 }

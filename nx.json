@@ -56,6 +56,15 @@
       }
     }
   ],
+  "release": {
+    "projects": ["flume"],
+    "version": {
+      "conventionalCommits": true
+    },
+    "changelog": {
+      "projectChangelogs": true
+    }
+  },
   "targetDefaults": {
     "test": {
       "dependsOn": ["^build"]
