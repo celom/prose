@@ -1,6 +1,6 @@
 # Flume
 
-Declarative workflow DSL for orchestrating complex business operations in Node.js.
+Declarative workflow DSL for orchestrating complex business operations in Javascript/Typescript.
 
 ```typescript
 const flow = createFlow<{ orderId: string }>('process-order')
