@@ -244,6 +244,14 @@ export type StepDefinition<
   | BreakStepDefinition<TInput, TDeps, TState>;
 
 /**
+ * Merge strategy for parallel execution
+ * - 'shallow': Default - later results override earlier ones (silent overwrites)
+ * - 'error-on-conflict': Throw error if keys conflict between results
+ * - 'deep': Perform deep merge of nested objects
+ */
+export type MergeStrategy = 'shallow' | 'error-on-conflict' | 'deep';
+
+/**
  * Retry configuration for a step
  */
 export interface RetryOptions {

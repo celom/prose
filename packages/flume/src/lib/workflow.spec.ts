@@ -6,8 +6,6 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   createFlow,
   composeFlows,
-  parallel,
-  sequence,
   ValidationError,
   TimeoutError,
 } from './index.js';
@@ -700,150 +698,109 @@ describe('Workflow Library', () => {
       });
     });
 
-    describe('parallel', () => {
-      it('should execute handlers in parallel', async () => {
-        const timestamps: number[] = [];
+  });
 
-        const handler1 = async (): Promise<{ handler1: boolean }> => {
-          await new Promise((resolve) => setTimeout(resolve, 20));
-          timestamps.push(Date.now());
-          return { handler1: true };
-        };
+  describe('Builder .parallel() method', () => {
+    it('should execute handlers in parallel and merge results', async () => {
+      const flow = createFlow<{ org: string }, EmptyDeps>('builder-parallel')
+        .parallel('fetchAll', 'shallow',
+          () => ({ users: ['alice', 'bob'] }),
+          () => ({ posts: ['p1', 'p2'] }),
+          () => ({ comments: ['c1'] }),
+        )
+        .build();
 
-        const handler2 = async (): Promise<{ handler2: boolean }> => {
-          await new Promise((resolve) => setTimeout(resolve, 20));
-          timestamps.push(Date.now());
-          return { handler2: true };
-        };
+      const result = await flow.execute({ org: 'test' }, {});
 
-        const flow = createFlow<any, any>('parallel-test')
-          .step(
-            'parallel',
-            parallel('parallelOps', 'shallow', handler1, handler2) as any,
-          )
-          .build();
-
-        const start = Date.now();
-        const result = await flow.execute({}, mockDeps);
-        const duration = Date.now() - start;
-
-        expect(result).toEqual({
-          handler1: true,
-          handler2: true,
-        });
-
-        // Should complete in ~20ms (parallel), not ~40ms (sequential)
-        expect(duration).toBeLessThan(35);
-      });
-
-      it('should merge results from parallel handlers', async () => {
-        const flow = createFlow<any, any>('merge-parallel')
-          .step(
-            'fetch',
-            parallel(
-              'fetchData',
-              'shallow',
-              (): { users: string[] } => ({ users: ['alice', 'bob'] }),
-              (): { posts: string[] } => ({
-                posts: ['post1', 'post2'],
-              }),
-              (): { comments: string[] } => ({
-                comments: ['c1', 'c2'],
-              }),
-            ) as any,
-          )
-          .build();
-
-        const result = await flow.execute({}, mockDeps);
-
-        expect(result).toEqual({
-          users: ['alice', 'bob'],
-          posts: ['post1', 'post2'],
-          comments: ['c1', 'c2'],
-        });
+      expect(result).toEqual({
+        users: ['alice', 'bob'],
+        posts: ['p1', 'p2'],
+        comments: ['c1'],
       });
     });
 
-    describe('sequence', () => {
-      it('should execute handlers sequentially', async () => {
-        const order: number[] = [];
+    it('should actually run handlers concurrently', async () => {
+      const handler1 = async () => {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        return { a: 1 };
+      };
 
-        const handler1 = async (): Promise<{ step: number }> => {
-          order.push(1);
-          return { step: 1 };
-        };
+      const handler2 = async () => {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        return { b: 2 };
+      };
 
-        const handler2 = async (ctx: any): Promise<{ step: number }> => {
-          order.push(2);
-          expect(ctx.state.step).toBe(1);
-          return { step: 2 };
-        };
+      const flow = createFlow<Record<string, never>, EmptyDeps>('concurrent-test')
+        .parallel('ops', 'shallow', handler1, handler2)
+        .build();
 
-        const handler3 = async (ctx: any): Promise<{ step: number }> => {
-          order.push(3);
-          expect(ctx.state.step).toBe(2);
-          return { step: 3 };
-        };
+      const start = Date.now();
+      const result = await flow.execute({}, {});
+      const duration = Date.now() - start;
 
-        const flow = createFlow<any, any>('sequence-test')
-          .step(
-            'seq',
-            sequence('operations', handler1, handler2, handler3) as any,
-          )
-          .build();
+      expect(result).toEqual({ a: 1, b: 2 });
+      expect(duration).toBeLessThan(35);
+    });
 
-        await flow.execute({}, mockDeps);
+    it('should merge with prior state from earlier steps', async () => {
+      const flow = createFlow<{ x: number }, EmptyDeps>('merge-prior')
+        .step('init', (ctx) => ({ base: ctx.input.x }))
+        .parallel('fetch', 'shallow',
+          () => ({ a: 10 }),
+          () => ({ b: 20 }),
+        )
+        .build();
 
-        expect(order).toEqual([1, 2, 3]);
+      const result = await flow.execute({ x: 1 }, {});
+
+      expect(result).toEqual({ base: 1, a: 10, b: 20 });
+    });
+
+    it('should support error-on-conflict strategy', async () => {
+      const flow = createFlow<Record<string, never>, EmptyDeps>('conflict-test')
+        .parallel('ops', 'error-on-conflict',
+          () => ({ key: 'first' }),
+          () => ({ key: 'second' }),
+        )
+        .build();
+
+      await expect(flow.execute({}, {})).rejects.toThrow(
+        "Key conflict detected in parallel merge: 'key'",
+      );
+    });
+
+    it('should support deep merge strategy', async () => {
+      const flow = createFlow<Record<string, never>, EmptyDeps>('deep-merge')
+        .parallel('ops', 'deep',
+          () => ({ config: { theme: 'dark' } }),
+          () => ({ config: { lang: 'en' } }),
+        )
+        .build();
+
+      const result = await flow.execute({}, {});
+
+      expect(result).toEqual({
+        config: { theme: 'dark', lang: 'en' },
       });
+    });
 
-      it('should accumulate state through sequence', async () => {
-        const flow = createFlow<{ base: number }, any>('accumulate-seq')
-          .step(
-            'calculate',
-            sequence(
-              'math',
-              (ctx: any): { sum: number } => ({ sum: ctx.input.base + 10 }),
-              (ctx: any): { product: number } => ({
-                product: ctx.state.sum * 2,
-              }),
-              (ctx: any): { final: number } => ({
-                final: ctx.state.product - 5,
-              }),
-            ) as any,
-          )
-          .build();
+    it('should allow chaining after parallel', async () => {
+      const flow = createFlow<Record<string, never>, EmptyDeps>('chain-after')
+        .parallel('fetch', 'shallow',
+          () => ({ users: ['a'] }),
+          () => ({ posts: ['p'] }),
+        )
+        .step('count', (ctx) => ({
+          total: ctx.state.users.length + ctx.state.posts.length,
+        }))
+        .build();
 
-        const result = await flow.execute({ base: 5 }, mockDeps);
+      const result = await flow.execute({}, {});
 
-        expect(result).toEqual({
-          sum: 15,
-          product: 30,
-          final: 25,
-        });
-      });
-
-      it('should only return new state additions', async () => {
-        const flow = createFlow<any, any>('state-diff')
-          .step('initial', () => ({ a: 1, b: 2 }))
-          .step(
-            'seq',
-            sequence(
-              'ops',
-              (): { c: number } => ({ c: 3 }),
-              (): { d: number } => ({ d: 4 }),
-            ) as any,
-          )
-          .build();
-
-        const result = await flow.execute({}, mockDeps);
-
-        expect(result).toEqual({
-          a: 1,
-          b: 2,
-          c: 3,
-          d: 4,
-        });
+      expect(result).toEqual({
+        users: ['a'],
+        posts: ['p'],
+        total: 2,
       });
     });
   });
@@ -1115,14 +1072,9 @@ describe('Workflow Library', () => {
 
     it('should deep merge nested objects', async () => {
       const flow = createFlow<Record<string, never>, EmptyDeps>('test')
-        .step(
-          'parallelDeep',
-          parallel(
-            'deepMergeTest',
-            'deep',
-            () => ({ config: { host: 'localhost' } }),
-            () => ({ config: { port: 5432 } }),
-          ) as any,
+        .parallel('deepMergeTest', 'deep',
+          () => ({ config: { host: 'localhost' } }),
+          () => ({ config: { port: 5432 } }),
         )
         .build();
 
@@ -1133,14 +1085,9 @@ describe('Workflow Library', () => {
 
     it('should concatenate arrays in deep merge (not overwrite)', async () => {
       const flow = createFlow<Record<string, never>, EmptyDeps>('array-merge')
-        .step(
-          'parallelArrays',
-          parallel(
-            'arrayMergeTest',
-            'deep',
-            () => ({ items: [{ id: 1 }] }),
-            () => ({ items: [{ id: 2 }] }),
-          ) as any,
+        .parallel('arrayMergeTest', 'deep',
+          () => ({ items: [{ id: 1 }] }),
+          () => ({ items: [{ id: 2 }] }),
         )
         .build();
 
@@ -1152,14 +1099,9 @@ describe('Workflow Library', () => {
 
     it('should handle mixed nested structures in deep merge', async () => {
       const flow = createFlow<Record<string, never>, EmptyDeps>('mixed-merge')
-        .step(
-          'parallelMixed',
-          parallel(
-            'mixedMergeTest',
-            'deep',
-            () => ({ config: { features: ['auth'] }, users: [{ name: 'alice' }] }),
-            () => ({ config: { features: ['logging'], timeout: 30 }, users: [{ name: 'bob' }] }),
-          ) as any,
+        .parallel('mixedMergeTest', 'deep',
+          () => ({ config: { features: ['auth'] }, users: [{ name: 'alice' }] }),
+          () => ({ config: { features: ['logging'], timeout: 30 }, users: [{ name: 'bob' }] }),
         )
         .build();
 

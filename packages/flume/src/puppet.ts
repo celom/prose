@@ -109,6 +109,51 @@ const cachedLookup = createFlow<CacheInput, CacheDeps>('cachedLookup')
   }))
   .build();
 
+// ── Parallel builder method ─────────────────────────────
+
+interface FetchDeps extends BaseFlowDependencies {
+  api: { getUsers(): Promise<string[]>; getPosts(): Promise<string[]> };
+}
+
+const parallelFlow = createFlow<{ orgId: string }, FetchDeps>('parallelFetch')
+  .step('init', (ctx) => ({ orgId: ctx.input.orgId }))
+  .parallel('fetchAll', 'shallow',
+    async (ctx) => {
+      const users = await ctx.deps.api.getUsers();
+      return { users };
+    },
+    async (ctx) => {
+      const posts = await ctx.deps.api.getPosts();
+      return { posts };
+    },
+  )
+  .step('summarize', (ctx) => {
+    // State should have orgId, users, and posts from the parallel step
+    void (ctx.state.orgId satisfies string);
+    void (ctx.state.users satisfies string[]);
+    void (ctx.state.posts satisfies string[]);
+    return { summary: `${ctx.state.users.length} users, ${ctx.state.posts.length} posts` };
+  })
+  .build();
+
+// ── Parallel chained with subsequent steps ──────────────
+
+const combinedFlow = createFlow<{ id: string }, never>('combined')
+  .step('load', () => ({ loaded: true as const }))
+  .parallel('fetch', 'shallow',
+    () => ({ a: 1 }),
+    () => ({ b: 'two' }),
+  )
+  .step('process', (ctx) => {
+    // Should see loaded, a, b from prior steps
+    void (ctx.state.loaded satisfies true);
+    void (ctx.state.a satisfies number);
+    void (ctx.state.b satisfies string);
+    return { processed: true as const };
+  })
+  .step('finalize', () => ({ finalized: true as const }))
+  .build();
+
 // ── Verify output types ──────────────────────────────────
 
 async function _typeAssertions() {
@@ -144,10 +189,30 @@ async function _typeAssertions() {
   } else {
     void (cacheResult satisfies { fromCache: false; freshValue: string; });
   }
+
+  // Parallel builder output should merge all handler results + prior state
+  const parallelResult = await parallelFlow.execute(
+    { orgId: 'org1' },
+    { api: { getUsers: async () => ['a'], getPosts: async () => ['p'] } },
+  );
+  void (parallelResult.orgId satisfies string);
+  void (parallelResult.users satisfies string[]);
+  void (parallelResult.posts satisfies string[]);
+  void (parallelResult.summary satisfies string);
+
+  // Combined flow chains parallel with subsequent steps
+  const combinedResult = await combinedFlow.execute({ id: 'x' }, undefined as never);
+  void (combinedResult.loaded satisfies true);
+  void (combinedResult.a satisfies number);
+  void (combinedResult.b satisfies string);
+  void (combinedResult.processed satisfies true);
+  void (combinedResult.finalized satisfies true);
 }
 
 void orderFlow;
 void branchA;
 void branchB;
 void cachedLookup;
+void parallelFlow;
+void combinedFlow;
 void _typeAssertions;

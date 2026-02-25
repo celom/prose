@@ -16,9 +16,6 @@ export {
 export {
   createFlow,
   composeFlows,
-  parallel,
-  sequence,
-  type MergeStrategy,
 } from './flow-factories.js';
 
 // Export executor (advanced usage)

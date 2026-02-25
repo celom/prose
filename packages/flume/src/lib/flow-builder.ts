@@ -8,10 +8,22 @@ import type {
   FlowState,
   BaseFlowDependencies,
   FlowEvent,
+  MergeStrategy,
 } from './types.js';
 import { FlowExecutor } from './flow-executor.js';
+import { deepMerge } from './utils.js';
 
 type StepNode<T> = { readonly head: T; readonly tail: StepNode<T> | null };
+
+/**
+ * Converts a union type to an intersection type.
+ * Used to merge return types from parallel/sequence handlers.
+ */
+type UnionToIntersection<U> = (
+  U extends unknown ? (k: U) => void : never
+) extends (k: infer I) => void
+  ? I
+  : never;
 
 /**
  * FlowBuilder provides a fluent API for creating declarative workflows
@@ -78,7 +90,7 @@ export class FlowBuilder<
   ): FlowBuilder<TInput, TDeps, TResult & TState, TMapperOutput, TBreakOutputs> {
     return new FlowBuilder<TInput, TDeps, TResult & TState, TMapperOutput, TBreakOutputs>(
       this.name,
-      { head: { name, type: 'step', handler, retryOptions }, tail: this.steps as StepNode<StepDefinition<TInput, TDeps, TResult & TState>> | null },
+      { head: { name, type: 'step', handler, retryOptions }, tail: this.steps },
       this.length + 1,
     );
   }
@@ -96,7 +108,7 @@ export class FlowBuilder<
   ): FlowBuilder<TInput, TDeps, TResult & TState, TMapperOutput, TBreakOutputs> {
     return new FlowBuilder<TInput, TDeps, TResult & TState, TMapperOutput, TBreakOutputs>(
       this.name,
-      { head: { name, type: 'step', handler, condition, retryOptions }, tail: this.steps as StepNode<StepDefinition<TInput, TDeps, TResult & TState>> | null },
+      { head: { name, type: 'step', handler, condition, retryOptions }, tail: this.steps },
       this.length + 1,
     );
   }
@@ -113,7 +125,9 @@ export class FlowBuilder<
   ): FlowBuilder<TInput, TDeps, TResult & TState, TMapperOutput, TBreakOutputs> {
     return new FlowBuilder<TInput, TDeps, TResult & TState, TMapperOutput, TBreakOutputs>(
       this.name,
-      { head: { name, type: 'transaction', handler }, tail: this.steps as StepNode<StepDefinition<TInput, TDeps, TResult & TState>> | null },
+      {
+        head: { name, type: 'transaction', handler }, tail: this.steps
+      },
       this.length + 1,
     );
   }
@@ -234,6 +248,83 @@ export class FlowBuilder<
   }
 
   /**
+   * Add a parallel execution step that runs multiple handlers concurrently
+   * and merges their results into the flow state.
+   *
+   * @example
+   * .parallel('fetchAll', 'shallow',
+   *   (ctx) => ({ users: fetchUsers(ctx.input.orgId) }),
+   *   (ctx) => ({ posts: fetchPosts(ctx.input.orgId) }),
+   * )
+   */
+  parallel<TResults extends object[]>(
+    name: string,
+    strategy: MergeStrategy,
+    ...handlers: {
+      [K in keyof TResults]: (
+        ctx: FlowContext<TInput, TDeps, TState>,
+      ) => TResults[K] | Promise<TResults[K]>;
+    }
+  ): FlowBuilder<
+    TInput,
+    TDeps,
+    UnionToIntersection<TResults[number]> & TState,
+    TMapperOutput,
+    TBreakOutputs
+  > {
+    type TMerged = UnionToIntersection<TResults[number]>;
+
+    const handler = async (
+      ctx: FlowContext<TInput, TDeps, TState>,
+    ): Promise<TMerged> => {
+      const results = await Promise.all(
+        handlers.map((h) => h(ctx)),
+      );
+
+      if (strategy === 'error-on-conflict') {
+        const allKeys = new Set<string>();
+        for (const result of results) {
+          if (result && typeof result === 'object') {
+            for (const key in result) {
+              if (allKeys.has(key)) {
+                throw new Error(
+                  `[Workflow:${name}] Key conflict detected in parallel merge: '${key}'`,
+                );
+              }
+              allKeys.add(key);
+            }
+          }
+        }
+        return Object.assign({}, ...results);
+      }
+
+      if (strategy === 'deep') {
+        return deepMerge(
+          {},
+          ...(results as Array<Record<string, unknown> | null | undefined>),
+        ) as TMerged;
+      }
+
+      return Object.assign({}, ...results);
+    };
+
+    return new FlowBuilder<
+      TInput,
+      TDeps,
+      TMerged & TState,
+      TMapperOutput,
+      TBreakOutputs
+    >(
+      this.name,
+      {
+        head: { name, type: 'step', handler },
+        tail: this.steps,
+      },
+      this.length + 1,
+    );
+  }
+
+  /**
    * Transform the accumulated state into the final output
    */
   map<TNewOutput>(
@@ -241,7 +332,7 @@ export class FlowBuilder<
   ): FlowBuilder<TInput, TDeps, TState, TNewOutput, TBreakOutputs> {
     return new FlowBuilder<TInput, TDeps, TState, TNewOutput, TBreakOutputs>(
       this.name,
-      this.steps as StepNode<StepDefinition<TInput, TDeps, TState>> | null,
+      this.steps,
       this.length,
       mapper,
     );
