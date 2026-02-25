@@ -426,7 +426,7 @@ describe('Workflow Library', () => {
     });
 
     it('should handle missing event publisher gracefully when configured', async () => {
-      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => { /* empty */ });
 
       const flow = createFlow<any, any>('no-publisher-warn')
         .event('auth', () => ({ eventType: 'user.create', data: 'test' }))

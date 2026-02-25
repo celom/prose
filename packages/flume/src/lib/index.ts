@@ -14,9 +14,6 @@ export {
   FlowBuilder,
 } from './flow-builder.js';
 
-// Export executor (advanced usage)
-export { FlowExecutor } from './flow-executor.js';
-
 // Export observer types and implementations
 export type { FlowObserver } from './observer.js';
 export { DefaultObserver, NoOpObserver } from './observer.js';
