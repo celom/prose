@@ -74,7 +74,7 @@ describe('Workflow Library', () => {
 
     it('should support transaction steps', () => {
       const flow = createFlow<any, any>('transaction-flow')
-        .transaction(async (ctx, tx) => {
+        .transaction('persist', async (ctx, tx) => {
           return { transactionId: 'tx-123' };
         })
         .build();
@@ -336,7 +336,7 @@ describe('Workflow Library', () => {
         .mockResolvedValue({ txResult: 'success' });
 
       const flow = createFlow<any, any>('tx-verify')
-        .transaction(transactionHandler, 'myTransaction')
+        .transaction('myTransaction', transactionHandler)
         .build();
 
       await flow.execute({}, mockDeps);
@@ -353,7 +353,7 @@ describe('Workflow Library', () => {
 
     it('should handle missing database in transaction', async () => {
       const flow = createFlow<any, any>('no-db')
-        .transaction(async (ctx, tx) => ({ result: 'ok' }))
+        .transaction('persist', async (ctx, tx) => ({ result: 'ok' }))
         .build();
 
       await expect(flow.execute({}, { notADb: 'wrong' })).rejects.toThrow(
@@ -1339,7 +1339,7 @@ describe('Workflow Library', () => {
       };
 
       const flow = createFlow<Record<string, never>, any>('break-after-tx')
-        .transaction(async () => ({ txComplete: true }))
+        .transaction('persist', async () => ({ txComplete: true }))
         .breakIf(
           (ctx) => ctx.state.txComplete,
           () => ({ result: 'after-tx-break' }),

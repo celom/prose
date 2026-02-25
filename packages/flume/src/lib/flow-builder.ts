@@ -123,11 +123,11 @@ export class FlowBuilder<
    * Add a transaction step for database operations
    */
   transaction<TResult extends object>(
+    name: string,
     handler: (
       ctx: FlowContext<TInput, TDeps, TState>,
       tx: unknown,
     ) => TResult | Promise<TResult>,
-    name: string = 'transaction',
   ): FlowBuilder<TInput, TDeps, TResult & TState, TMapperOutput> {
     const next = new FlowBuilder<
       TInput,
