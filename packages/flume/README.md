@@ -1,410 +1,432 @@
 # @celom/flume
 
-A declarative workflow DSL for orchestrating complex business operations with type-safe state management, automatic retries, transaction support, and observability.
+Declarative workflow DSL for orchestrating complex business operations in Node.js.
 
-## Features
-
-- **Fluent Builder API** - Chain steps together in a readable, declarative style
-- **Type-Safe State Accumulation** - Each step's output is merged into state with full TypeScript inference
-- **Database Transactions** - First-class support for transactional operations via Drizzle
-- **Event Publishing** - Integrated event publishing with correlation ID propagation
-- **Retry Logic** - Configurable retries with exponential backoff
-- **Conditional Steps** - Skip steps based on runtime conditions
-- **Short-Circuit Execution** - Break out of flows early with `breakIf()`
-- **Timeouts** - Flow-level and step-level timeout protection
-- **Observability** - Hook into every step for logging, metrics, and debugging
-
-## Installation
-
-```bash
-bun add @celom/flume
-```
-
-## Quick Start
+Define multi-step business logic as type-safe pipelines with built-in retries, timeouts, transactions, event publishing, and observability — using plain async/await.
 
 ```typescript
 import { createFlow, ValidationError } from '@celom/flume';
 
-// Define input and dependency types
-interface LoginInput {
-  email: string;
-  password: string;
-}
-
-interface LoginDeps {
-  db: DbClient;
-  accountRepo: AccountRepository;
-  eventPublisher: EventPublisher;
-}
-
-// Create a flow
-const loginFlow = createFlow<LoginInput, LoginDeps>('user-login')
-  // Validation (throws ValidationError on failure)
-  .validate('validateEmail', (ctx) => {
-    if (!ctx.input.email.includes('@')) {
-      throw new ValidationError('Invalid email format', 'email');
-    }
+const onboardUser = createFlow<{ email: string; name: string }>('onboard-user')
+  .validate('checkEmail', (ctx) => {
+    if (!ctx.input.email.includes('@'))
+      throw ValidationError.single('email', 'Invalid email');
   })
-
-  // Regular step - returns state to merge
-  .step('findAccount', async (ctx) => {
-    const account = await ctx.deps.accountRepo.findByEmail(ctx.input.email);
-    if (!account) throw new Error('Account not found');
-    return { account };
+  .step('createAccount', async (ctx) => {
+    const user = await db.createUser(ctx.input);
+    return { user };
   })
-
-  // Transaction step - runs in a database transaction
-  .transaction(async (ctx, tx) => {
-    await ctx.deps.accountRepo.updateLastLogin(ctx.state.account.id, tx);
-    return { loginRecorded: true };
+  .withRetry({ maxAttempts: 3, delayMs: 200, backoffMultiplier: 2 })
+  .step('sendWelcome', async (ctx) => {
+    await mailer.send(ctx.state.user.email, 'Welcome!');
   })
-
-  // Event publishing
-  .event('auth', (ctx) => ({
-    eventType: 'user.login',
-    data: { userId: ctx.state.account.id },
+  .event('users', (ctx) => ({
+    eventType: 'user.onboarded',
+    userId: ctx.state.user.id,
   }))
-
-  // Map accumulated state to final output
-  .map((input, state) => ({
-    userId: state.account.id,
-    email: state.account.email,
-  }))
-
   .build();
 
-// Execute the flow
-const result = await loginFlow.execute(
-  { email: 'user@example.com', password: 'secret' },
-  { db, accountRepo, eventPublisher }
+const result = await onboardUser.execute(
+  { email: 'alice@example.com', name: 'Alice' },
+  { db, eventPublisher }
 );
 ```
 
-## API Reference
+## Install
 
-### `createFlow<TInput, TDeps>(name)`
-
-Creates a new flow builder with the given name.
-
-```typescript
-const flow = createFlow<{ userId: string }, { db: DbClient }>('my-flow');
+```bash
+npm install @celom/flume
 ```
 
-### Step Types
+## Features
 
-#### `.validate(name, handler)`
+- **Type-safe state threading** — each step's return type merges into `ctx.state`, giving you full autocomplete and compile-time checks across the entire pipeline
+- **Retries with exponential backoff** — per-step retry policies with configurable delays, backoff multipliers, caps, and conditional retry predicates
+- **Timeouts** — flow-level and step-level timeouts backed by `AbortSignal`, with actual interruption of async operations
+- **Cooperative cancellation** — pass an external `AbortSignal` to cancel a running flow
+- **Database transactions** — wrap steps in `db.transaction()` with any ORM (Drizzle, Knex, Prisma)
+- **Event publishing** — emit domain events to named channels with automatic correlation IDs
+- **Parallel execution** — run independent steps concurrently with configurable merge strategies
+- **Conditional steps & early exit** — skip steps based on runtime conditions or short-circuit the flow entirely
+- **Composable sub-flows** — extract and reuse step sequences via `.pipe()`
+- **Observability hooks** — plug in logging, metrics, or tracing through the observer interface
+- **Zero dependencies** — runs in-process with no external infrastructure
 
-Validation step that doesn't return state. Throw `ValidationError` to fail validation.
+## Guide
 
-```typescript
-.validate('checkInput', (ctx) => {
-  if (!ctx.input.email) {
-    throw ValidationError.single('email', 'Email is required');
-  }
-})
-```
+### Creating a flow
 
-#### `.step(name, handler, retryOptions?)`
-
-Regular step that returns state to merge. The returned object is shallow-merged into the accumulated state.
-
-```typescript
-.step('fetchUser', async (ctx) => {
-  const user = await ctx.deps.userRepo.findById(ctx.input.userId);
-  return { user }; // Merged into ctx.state
-})
-```
-
-#### `.stepIf(name, condition, handler, retryOptions?)`
-
-Conditional step that only executes if the condition returns `true`.
+`createFlow` returns a builder. Chain steps onto it and call `.build()` to get an executable flow.
 
 ```typescript
-.stepIf(
-  'sendWelcomeEmail',
-  (ctx) => ctx.state.user.isNewUser,
-  async (ctx) => {
-    await ctx.deps.emailService.sendWelcome(ctx.state.user.email);
-    return { welcomeEmailSent: true };
-  }
-)
-```
+import { createFlow } from '@celom/flume';
 
-#### `.transaction(handler, name?)`
-
-Executes the handler within a database transaction. Requires `db` in dependencies.
-
-```typescript
-.transaction(async (ctx, tx) => {
-  await ctx.deps.accountRepo.update(ctx.state.account, tx);
-  await ctx.deps.auditRepo.log('account.updated', tx);
-  return { updated: true };
-}, 'updateAccount')
-```
-
-#### `.event(channel, handler, name?)`
-
-Publishes events to the specified channel. Requires `eventPublisher` in dependencies.
-
-```typescript
-.event('auth', (ctx) => ({
-  eventType: 'user.created',
-  data: { userId: ctx.state.user.id },
-}), 'publishUserCreated')
-
-// Multiple events
-.event('notifications', (ctx) => [
-  { eventType: 'email.send', data: { to: ctx.state.user.email } },
-  { eventType: 'slack.notify', data: { channel: '#signups' } },
-])
-```
-
-#### `.breakIf(condition, returnValue?)`
-
-Short-circuits the flow if the condition is true. Remaining steps (including `.map()`) are skipped.
-
-```typescript
-.step('checkCache', async (ctx) => {
-  const cached = await ctx.deps.cache.get(ctx.input.id);
-  return { cached, cacheHit: !!cached };
-})
-.breakIf(
-  (ctx) => ctx.state.cacheHit,
-  (ctx) => ({ data: ctx.state.cached, fromCache: true })
-)
-// Steps below only run if cache miss
-.step('fetchFromDb', ...)
-```
-
-### Modifiers
-
-#### `.withRetry(options)`
-
-Adds retry logic to the previous step.
-
-```typescript
-.step('callExternalApi', async (ctx) => {
-  return await ctx.deps.api.fetch(ctx.input.id);
-})
-.withRetry({
-  maxAttempts: 3,
-  delayMs: 100,
-  backoffMultiplier: 2,    // 100ms, 200ms, 400ms
-  maxDelayMs: 1000,        // Cap delay at 1 second
-  shouldRetry: (error) => error.code !== 'NOT_FOUND',
-  stepTimeout: 5000,       // 5 second timeout per attempt
-})
-```
-
-#### `.map(mapper)`
-
-Transforms the accumulated state into the final output. Skipped if flow breaks early via `breakIf()`.
-
-```typescript
-.map((input, state) => ({
-  id: state.user.id,
-  name: `${state.profile.firstName} ${state.profile.lastName}`,
-}))
-```
-
-### Flow Composition
-
-#### `composeFlows(name, flows)`
-
-Combines multiple flows into a single flow. Steps execute in sequence.
-
-```typescript
-import { composeFlows } from '@celom/flume';
-
-const validationFlow = createFlow<Input, Deps>('validation')
-  .validate('checkA', ...)
-  .validate('checkB', ...)
+const flow = createFlow<{ orderId: string }>('process-order')
+  .step('fetch', async (ctx) => {
+    const order = await db.getOrder(ctx.input.orderId);
+    return { order };
+  })
+  .step('charge', async (ctx) => {
+    const receipt = await payments.charge(ctx.state.order.total);
+    return { receipt };
+  })
   .build();
-
-const processingFlow = createFlow<Input, Deps>('processing')
-  .step('process', ...)
-  .build();
-
-const combined = composeFlows('full-flow', [validationFlow, processingFlow]);
 ```
 
-#### `parallel(name, strategy, ...handlers)`
+The generic parameter defines the input shape. TypeScript infers the state type as steps accumulate — after the `fetch` step, `ctx.state.order` is available with full type information.
 
-Executes multiple handlers in parallel within a step.
+### Running a flow
 
 ```typescript
-import { parallel } from '@celom/flume';
+const result = await flow.execute(
+  { orderId: 'ord_123' },    // input
+  { db, eventPublisher },     // dependencies
+  { timeout: 30_000 }         // options (optional)
+);
+```
 
-.step('fetchData', parallel(
-  'parallelFetch',
-  'deep',  // Merge strategy: 'shallow' | 'error-on-conflict' | 'deep'
+**Execution options:**
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `timeout` | `number` | Max duration for the entire flow (ms) |
+| `stepTimeout` | `number` | Default max duration per step (ms) |
+| `signal` | `AbortSignal` | External signal for cancellation |
+| `observer` | `FlowObserver` | Lifecycle hooks for logging/metrics |
+| `throwOnError` | `boolean` | `false` returns partial state instead of throwing |
+| `correlationId` | `string` | Custom ID propagated to events and observers |
+| `errorHandling` | `object` | Control behavior for missing deps (see below) |
+
+### Validation
+
+Validation steps run before processing and are never retried. Throw `ValidationError` to fail fast.
+
+```typescript
+import { ValidationError } from '@celom/flume';
+
+flow.validate('checkInput', (ctx) => {
+  if (ctx.input.amount <= 0)
+    throw ValidationError.single('amount', 'Must be positive');
+});
+```
+
+`ValidationError` accepts an optional array of issues for multi-field validation:
+
+```typescript
+throw new ValidationError('Validation failed', [
+  { field: 'email', message: 'Required' },
+  { field: 'age', message: 'Must be at least 18' },
+]);
+```
+
+### Retries
+
+Chain `.withRetry()` after any step to add a retry policy.
+
+```typescript
+flow
+  .step('callExternalApi', async (ctx) => {
+    const data = await api.fetch(ctx.input.url);
+    return { data };
+  })
+  .withRetry({
+    maxAttempts: 5,
+    delayMs: 100,
+    backoffMultiplier: 2,
+    maxDelayMs: 5_000,
+    shouldRetry: (err) => err.status !== 400,
+    stepTimeout: 10_000, // override the flow-level stepTimeout for this step
+  })
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `maxAttempts` | `number` | — | Total attempts (including the first) |
+| `delayMs` | `number` | — | Initial delay between retries |
+| `backoffMultiplier` | `number` | `1` | Multiplier applied to delay after each retry |
+| `maxDelayMs` | `number` | `Infinity` | Upper bound on delay |
+| `shouldRetry` | `(error) => boolean` | — | Predicate to conditionally retry |
+| `stepTimeout` | `number` | — | Timeout override for this step |
+
+### Timeouts & cancellation
+
+```typescript
+const controller = new AbortController();
+
+const result = await flow.execute(input, deps, {
+  timeout: 30_000,       // abort if the flow exceeds 30s
+  stepTimeout: 5_000,    // abort any step that exceeds 5s
+  signal: controller.signal, // cancel from outside
+});
+
+// later, to cancel:
+controller.abort();
+```
+
+Inside step handlers, `ctx.signal` exposes the combined signal so you can pass it to fetch, database calls, or check `ctx.signal.aborted` for cooperative cancellation.
+
+```typescript
+flow.step('longOperation', async (ctx) => {
+  const resp = await fetch(url, { signal: ctx.signal });
+  return { data: await resp.json() };
+});
+```
+
+### Conditional steps
+
+`stepIf` runs the handler only when the condition returns `true`. Skipped steps don't affect state and don't consume retry attempts.
+
+```typescript
+flow
+  .step('checkCache', (ctx) => {
+    return { cached: cache.has(ctx.input.key) };
+  })
+  .stepIf('fromCache', (ctx) => ctx.state.cached, (ctx) => {
+    return { value: cache.get(ctx.input.key) };
+  })
+  .stepIf('fromDb', (ctx) => !ctx.state.cached, async (ctx) => {
+    return { value: await db.get(ctx.input.key) };
+  })
+```
+
+### Early exit with breakIf
+
+`breakIf` short-circuits the flow, skipping all remaining steps **and** the `.map()` transformer. An optional second argument defines the return value.
+
+```typescript
+flow
+  .step('findUser', async (ctx) => {
+    const existing = await db.findByEmail(ctx.input.email);
+    return { existing };
+  })
+  .breakIf(
+    (ctx) => ctx.state.existing != null,
+    (ctx) => ({ user: ctx.state.existing, created: false })
+  )
+  .step('createUser', async (ctx) => {
+    const user = await db.createUser(ctx.input);
+    return { user };
+  })
+  .map((input, state) => ({ user: state.user, created: true }))
+  .build();
+```
+
+### Database transactions
+
+Use `.transaction()` to wrap a step in `db.transaction()`. The transaction client is passed as the second argument.
+
+```typescript
+flow.transaction('persist', async (ctx, tx) => {
+  const id = await tx.insert('users', { name: ctx.input.name });
+  return { userId: id };
+});
+```
+
+Requires a `db` dependency conforming to:
+
+```typescript
+interface DatabaseClient {
+  transaction<T>(fn: (tx: TransactionClient) => Promise<T>): Promise<T>;
+}
+```
+
+Works with Drizzle, Knex, Prisma, or any ORM exposing a `transaction()` method.
+
+### Event publishing
+
+Emit domain events to named channels. Events are automatically enriched with `correlationId`.
+
+```typescript
+// single event
+flow.event('orders', (ctx) => ({
+  eventType: 'order.created',
+  orderId: ctx.state.orderId,
+}));
+
+// multiple events on the same channel
+flow.events('notifications', [
+  (ctx) => ({ eventType: 'email.send', to: ctx.input.email }),
+  (ctx) => ({ eventType: 'sms.send', to: ctx.input.phone }),
+]);
+```
+
+Requires an `eventPublisher` dependency conforming to:
+
+```typescript
+interface FlowEventPublisher {
+  publish(channel: string, event: FlowEvent): Promise<void> | void;
+}
+```
+
+### Parallel execution
+
+Run independent handlers concurrently and merge results into state.
+
+```typescript
+flow.parallel('fetchAll', 'deep',
   async (ctx) => ({ users: await fetchUsers() }),
   async (ctx) => ({ posts: await fetchPosts() }),
-  async (ctx) => ({ comments: await fetchComments() }),
-))
+);
+// ctx.state now has both `users` and `posts`
 ```
 
-Merge strategies:
-- `'shallow'` - Later results override earlier ones (default)
-- `'error-on-conflict'` - Throws if same key appears in multiple results
-- `'deep'` - Recursively merges objects, concatenates arrays
+**Merge strategies:**
 
-#### `sequence(name, ...handlers)`
+| Strategy | Behavior |
+|----------|----------|
+| `'shallow'` | `Object.assign()` — later results override earlier ones |
+| `'error-on-conflict'` | Throws if any keys overlap between results |
+| `'deep'` | Recursive merge; arrays are concatenated |
 
-Executes handlers sequentially within a step, accumulating state.
+### Output transformation
+
+`.map()` transforms the accumulated state into a custom output shape.
 
 ```typescript
-import { sequence } from '@celom/flume';
-
-.step('processSequentially', sequence(
-  'dataProcessing',
-  async (ctx) => ({ step1: await process1(ctx.input) }),
-  async (ctx) => ({ step2: await process2(ctx.state.step1) }),
-  async (ctx) => ({ step3: await process3(ctx.state.step2) }),
-))
+flow
+  .step('fetch', async (ctx) => {
+    const user = await db.getUser(ctx.input.id);
+    return { user };
+  })
+  .map((input, state) => ({
+    id: state.user.id,
+    displayName: state.user.name,
+  }))
+  .build();
 ```
 
-### Execution Options
+### Composable sub-flows with .pipe()
+
+Extract reusable step sequences as functions and compose them with `.pipe()`.
 
 ```typescript
-const result = await flow.execute(input, deps, {
-  // Unique ID for tracing across services
-  correlationId: 'req-123',
+function withAuth(builder) {
+  return builder
+    .step('validateToken', async (ctx) => {
+      const session = await auth.verify(ctx.input.token);
+      return { session };
+    })
+    .step('loadUser', async (ctx) => {
+      const user = await db.getUser(ctx.state.session.userId);
+      return { user };
+    });
+}
 
-  // Flow-level timeout (checked between steps)
-  timeout: 30000,
-
-  // Step-level timeout (uses Promise.race to actually interrupt)
-  stepTimeout: 5000,
-
-  // Don't throw on errors, return partial state instead
-  throwOnError: false,
-
-  // Observer for logging/metrics
-  observer: new DefaultObserver(logger),
-
-  // Error handling configuration
-  errorHandling: {
-    throwOnMissingDatabase: true,      // Default: true
-    throwOnMissingEventPublisher: true, // Default: true
-  },
-});
+const flow = createFlow<{ token: string }>('protected-action')
+  .pipe(withAuth)
+  .step('doAction', (ctx) => {
+    // ctx.state.user is fully typed here
+    return { result: `Hello, ${ctx.state.user.name}` };
+  })
+  .build();
 ```
 
 ### Observability
 
-Implement `FlowObserver` to hook into flow execution:
+Pass an observer to hook into flow and step lifecycle events.
 
 ```typescript
-import { FlowObserver, DefaultObserver } from '@celom/flume';
+import { PinoFlowObserver } from '@celom/flume';
+import pino from 'pino';
 
-const observer: FlowObserver<Input, Deps, State> = {
-  onFlowStart: (flowName, input) => {
-    console.log(`Starting ${flowName}`);
-  },
-  onFlowComplete: (flowName, output, duration) => {
-    metrics.histogram('flow.duration', duration, { flow: flowName });
-  },
-  onFlowError: (flowName, error, duration) => {
-    logger.error(`Flow ${flowName} failed`, error);
-  },
-  onFlowBreak: (flowName, stepName, returnValue, duration) => {
-    logger.info(`Flow ${flowName} short-circuited at ${stepName}`);
-  },
-  onStepStart: (stepName, context) => {},
-  onStepComplete: (stepName, result, duration, context) => {},
-  onStepError: (stepName, error, duration, context) => {},
-  onStepRetry: (stepName, attempt, maxAttempts, error) => {},
-  onStepSkipped: (stepName, context) => {},
-};
+const logger = pino();
+const observer = new PinoFlowObserver(logger);
 
-// Or use the built-in DefaultObserver
-const observer = new DefaultObserver(logger);
+await flow.execute(input, deps, { observer });
 ```
 
-### Error Types
+**Observer hooks:**
+
+| Hook | Called when |
+|------|------------|
+| `onFlowStart` | Flow begins |
+| `onFlowComplete` | Flow finishes successfully |
+| `onFlowError` | Flow fails |
+| `onFlowBreak` | Flow exits early via `breakIf` |
+| `onStepStart` | Step begins |
+| `onStepComplete` | Step finishes |
+| `onStepError` | Step fails (after exhausting retries) |
+| `onStepRetry` | Step is about to be retried |
+| `onStepSkipped` | Conditional step is skipped |
+
+All hooks are optional — implement only what you need:
 
 ```typescript
-import { ValidationError, FlowExecutionError, TimeoutError } from '@celom/flume';
+await flow.execute(input, deps, {
+  observer: {
+    onStepComplete: (name, _result, duration) =>
+      console.log(`${name} took ${duration}ms`),
+  },
+});
+```
 
-// Validation errors with structured issues
-throw ValidationError.single('email', 'Invalid format', 'bad@');
-throw ValidationError.multiple([
-  { field: 'email', message: 'Required' },
-  { field: 'password', message: 'Too short', value: '123' },
-]);
+**Built-in observers:** `DefaultObserver` (console), `NoOpObserver` (silent), `PinoFlowObserver` (structured logging).
 
-// Access error details
-catch (error) {
-  if (error instanceof ValidationError) {
-    console.log(error.issues); // [{ field, message, value? }]
-    console.log(error.field);  // First field (backward compat)
-  }
-  if (error instanceof TimeoutError) {
-    console.log(error.flowName, error.stepName, error.timeoutMs);
-  }
-  if (error instanceof FlowExecutionError) {
-    console.log(error.flowName, error.stepName, error.originalError);
+### Error handling
+
+By default, step errors are wrapped in `FlowExecutionError` and thrown.
+
+```typescript
+import { FlowExecutionError, ValidationError, TimeoutError } from '@celom/flume';
+
+try {
+  await flow.execute(input, deps);
+} catch (err) {
+  if (err instanceof ValidationError) {
+    // fail-fast validation — err.issues has field-level details
+  } else if (err instanceof TimeoutError) {
+    // flow or step exceeded its timeout
+  } else if (err instanceof FlowExecutionError) {
+    // step execution failure — err.stepName, err.originalError
   }
 }
 ```
 
-## Project Structure
-
-Recommended structure for flows in a service:
-
-```
-services/{service}/src/app/flows/
-└── {flow-name}/
-    ├── index.ts                    # Re-exports
-    ├── {flow-name}.flow.ts         # Flow definition
-    ├── types.ts                    # Input, Output, Deps types
-    ├── steps/
-    │   ├── index.ts                # Re-exports all steps
-    │   ├── validate-input.step.ts
-    │   ├── fetch-data.step.ts
-    │   └── process-data.step.ts
-    ├── transactions/
-    │   └── save-data.transaction.ts
-    └── events/
-        └── data-processed.event.ts
-```
-
-### Step Implementation Pattern
+Set `throwOnError: false` to return partial state instead of throwing:
 
 ```typescript
-// steps/find-account.step.ts
-import type { FlowContext } from '@celom/flume';
-import type { LoginInput, LoginDeps } from '../types.js';
-
-// Define the state this step expects
-type RequiredState = { normalizedEmail: string };
-
-export async function findAccountStep(
-  ctx: FlowContext<LoginInput, LoginDeps, RequiredState>,
-): Promise<{ account: Account }> {
-  const account = await ctx.deps.accountRepo.findByEmail(
-    ctx.state.normalizedEmail,
-  );
-
-  if (!account) {
-    throw new InvalidCredentialsError();
-  }
-
-  return { account };
-}
+const result = await flow.execute(input, deps, { throwOnError: false });
 ```
 
-## Best Practices
+Control behavior when optional dependencies are missing:
 
-1. **Keep steps small and focused** - Each step should do one thing well
-2. **Use explicit step names** - Names appear in logs and error messages
-3. **Define types for Input, Deps, and Output** - Leverage TypeScript's type inference
-4. **Use transactions for related database operations** - Ensure atomicity
-5. **Validate early** - Put validation steps at the beginning of flows
-6. **Use `breakIf` for early exits** - Avoid unnecessary work
-7. **Set timeouts** - Prevent hanging flows in production
-8. **Use observers in production** - Track flow execution for debugging
+```typescript
+await flow.execute(input, deps, {
+  errorHandling: {
+    throwOnMissingDatabase: false,        // warn instead of throwing
+    throwOnMissingEventPublisher: false,   // warn instead of throwing
+  },
+});
+```
+
+### Flow metadata
+
+Every step handler receives `ctx.meta` with runtime metadata:
+
+```typescript
+flow.step('example', (ctx) => {
+  ctx.meta.flowName;      // 'process-order'
+  ctx.meta.currentStep;   // 'example'
+  ctx.meta.startedAt;     // Date
+  ctx.meta.correlationId; // auto-generated or custom
+});
+```
+
+## What this isn't
+
+Flume is an **in-process** workflow orchestration library. It runs inside your existing Node.js process with zero external dependencies. Before adopting it, it's worth understanding what it does _not_ try to be:
+
+**Not a durable execution engine.** If you need workflows that survive process restarts, resume after hours or days, or coordinate across distributed services, look at [Temporal](https://temporal.io), [Inngest](https://www.inngest.com), or [Trigger.dev](https://trigger.dev). These require infrastructure (servers, queues, databases) but give you persistence and replay guarantees that an in-process library fundamentally cannot.
+
+**Not a full effect system.** [Effect-TS](https://effect.website) is more powerful in every technical dimension — typed errors in the return signature, type-level dependency injection via Layers, fibers, streams, and a massive standard library. If your team can invest in learning its functional programming model, Effect is the more capable choice. Flume trades that power for simplicity: pure async/await, no monads, no new paradigms to learn.
+
+**Not a state machine.** [XState](https://stately.ai/docs/xstate) models workflows as finite state machines with explicit states, transitions, and guards — ideal for complex non-linear flows with many possible state transitions. Flume is designed for sequential (or branching) business logic pipelines where a state machine's verbosity would be overhead.
+
+**Not a result type library.** Libraries like [neverthrow](https://github.com/supermacro/neverthrow) or [fp-ts](https://github.com/gcanti/fp-ts) encode errors in return types (`Result<T, E>`, `Either<E, A>`). Flume does not — steps throw, and failures are wrapped in `FlowExecutionError`. If typed error channels are critical to you, Effect or neverthrow are better fits.
+
+### Where Flume fits
+
+Flume is for teams building backend services with multi-step business logic (process an order, onboard a user, handle a payment) who want structured retries, timeouts, transactions, observability, and type-safe state threading — without adopting new infrastructure or a new programming paradigm.
 
 ## License
 
