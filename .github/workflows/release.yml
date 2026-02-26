@@ -30,7 +30,7 @@ jobs:
       - run: git config user.name "github-actions[bot]"
       - run: git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - run: bunx nx release --skip-publish --yes
+      - run: bunx nx release --skip-publish
         env:
           NX_DAEMON: false
 
