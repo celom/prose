@@ -45,4 +45,7 @@ jobs:
           NX_DAEMON: false
 
       - if: steps.release.outputs.new_release == 'true'
+        run: git push --follow-tags
+
+      - if: steps.release.outputs.new_release == 'true'
         run: npm run publish -- --access public
