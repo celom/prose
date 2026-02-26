@@ -1,3 +1,14 @@
+## 0.1.4 (2026-02-26)
+
+### 🩹 Fixes
+
+- add build step to release workflow for new releases ([4b60d14](https://github.com/celom/prose/commit/4b60d14))
+- add license field to package.json ([6643dce](https://github.com/celom/prose/commit/6643dce))
+
+### ❤️ Thank You
+
+- Carlos Mimoso
+
 ## 0.1.3 (2026-02-26)
 
 ### 🩹 Fixes
