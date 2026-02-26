@@ -1,3 +1,16 @@
+## 0.1.1 (2026-02-26)
+
+### 🩹 Fixes
+
+- retain outputMapper in FlowBuilder steps for consistent state handling ([2042b38](https://github.com/celom/flume/commit/2042b38))
+- update repository URL format in package.json ([3037775](https://github.com/celom/flume/commit/3037775))
+- change package.json private field to false ([a8b7460](https://github.com/celom/flume/commit/a8b7460))
+- update repository URL format in package.json and add release workflow ([889995a](https://github.com/celom/flume/commit/889995a))
+
+### ❤️ Thank You
+
+- Carlos Mimoso
+
 ## 0.1.0 (2026-02-25)
 
 ### 🚀 Features
