@@ -34,6 +34,4 @@ jobs:
         env:
           NX_DAEMON: false
 
-      - run: npx nx release publish --yes
-        env:
-          NPM_CONFIG_PROVENANCE: true
+      - run: npm publish packages/prose --provenance --access public
