@@ -177,6 +177,51 @@ const combinedFlow = createFlow<{ id: string }, never>('combined')
   .step('finalize', () => ({ finalized: true as const }))
   .build();
 
+// ── Transaction step with typed tx ───────────────────────
+
+interface InventoryItem {
+  sku: string;
+  qty: number;
+}
+
+interface WarehouseTx {
+  deduct(sku: string, qty: number): Promise<{ remaining: number }>;
+  insertShipment(data: { orderId: string; sku: string; qty: number }): Promise<{ shipmentId: string }>;
+}
+
+interface WarehouseDeps extends BaseFlowDependencies {
+  db: {
+    transaction<T>(fn: (tx: WarehouseTx) => Promise<T>): Promise<T>;
+  };
+}
+
+const fulfillOrder = createFlow<{ orderId: string; items: InventoryItem[] }, WarehouseDeps>('fulfillOrder')
+  .step('loadOrder', (ctx) => {
+    return { orderId: ctx.input.orderId, items: ctx.input.items };
+  })
+  .transaction('reserveAndShip', async (ctx, tx) => {
+    // tx is inferred as WarehouseTx from TDeps — no manual cast needed
+    const shipments: string[] = [];
+    for (const item of ctx.state.items) {
+      await tx.deduct(item.sku, item.qty);
+      const { shipmentId } = await tx.insertShipment({
+        orderId: ctx.state.orderId,
+        sku: item.sku,
+        qty: item.qty,
+      });
+      shipments.push(shipmentId);
+    }
+    return { shipmentIds: shipments };
+  })
+  .step('confirm', (ctx) => {
+    // State should have orderId, items, and shipmentIds from the transaction
+    void (ctx.state.orderId satisfies string);
+    void (ctx.state.items satisfies InventoryItem[]);
+    void (ctx.state.shipmentIds satisfies string[]);
+    return { confirmed: true as const };
+  })
+  .build();
+
 // ── Verify output types ──────────────────────────────────
 
 async function _typeAssertions() {
@@ -223,6 +268,16 @@ async function _typeAssertions() {
   void (parallelResult.posts satisfies string[]);
   void (parallelResult.summary satisfies string);
 
+  // Transaction output should merge into state
+  const fulfillResult = await fulfillOrder.execute(
+    { orderId: 'o1', items: [{ sku: 'ABC', qty: 2 }] },
+    { db: { transaction: async (fn) => fn({ deduct: async () => ({ remaining: 8 }), insertShipment: async () => ({ shipmentId: 's1' }) } as WarehouseTx) } },
+  );
+  void (fulfillResult.orderId satisfies string);
+  void (fulfillResult.items satisfies InventoryItem[]);
+  void (fulfillResult.shipmentIds satisfies string[]);
+  void (fulfillResult.confirmed satisfies true);
+
   // Combined flow chains parallel with subsequent steps
   const combinedResult = await combinedFlow.execute({ id: 'x' }, undefined as never);
   void (combinedResult.loaded satisfies true);
@@ -239,4 +294,5 @@ void cachedLookup;
 void parallelFlow;
 void authedFlow;
 void combinedFlow;
+void fulfillOrder;
 void _typeAssertions;

@@ -16,6 +16,16 @@ import { deepMerge } from './utils.js';
 type StepNode<T> = { readonly head: T; readonly tail: StepNode<T> | null };
 
 /**
+ * Infer the transaction client type from the deps' db.transaction signature.
+ * Falls back to `unknown` when TDeps is `never` or db is absent/untyped.
+ */
+type InferTransactionClient<TDeps> = [TDeps] extends [never]
+  ? unknown
+  : TDeps extends { db: { transaction(fn: (tx: infer Tx) => any): any } }
+    ? Tx
+    : unknown;
+
+/**
  * Converts a union type to an intersection type.
  * Used to merge return types from parallel/sequence handlers.
  */
@@ -132,13 +142,16 @@ export class FlowBuilder<
     name: string,
     handler: (
       ctx: FlowContext<TInput, TDeps, TState>,
-      tx: unknown,
+      tx: InferTransactionClient<TDeps>,
     ) => TResult | Promise<TResult>,
   ): FlowBuilder<TInput, TDeps, TResult & TState, TMapperOutput, TBreakOutputs> {
     return new FlowBuilder<TInput, TDeps, TResult & TState, TMapperOutput, TBreakOutputs>(
       this.name,
       {
-        head: { name, type: 'transaction', handler }, tail: this.steps
+        // Safe assertion: at runtime the executor passes the actual ORM tx object,
+        // which matches the inferred type. The step definition uses `unknown` for
+        // storage but contravariance prevents direct assignment.
+        head: { name, type: 'transaction', handler: handler as unknown as (ctx: FlowContext<TInput, TDeps, TState>, tx: unknown) => unknown | Promise<unknown> }, tail: this.steps
       },
       this.length + 1,
       this.outputMapper,
