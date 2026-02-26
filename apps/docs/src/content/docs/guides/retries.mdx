@@ -65,7 +65,7 @@ Use `shouldRetry` to skip retries for non-transient errors like validation failu
 
 ## Observing retries
 
-When using an [observer](/flume/guides/observability/), the `onStepRetry` hook is called before each retry attempt:
+When using an [observer](/prose/guides/observability/), the `onStepRetry` hook is called before each retry attempt:
 
 ```typescript
 await flow.execute(input, deps, {

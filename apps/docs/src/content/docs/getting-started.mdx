@@ -1,12 +1,12 @@
 ---
 title: Getting Started
-description: Install Flume and build your first workflow in minutes.
+description: Install Prose and build your first workflow in minutes.
 ---
 
 ## Installation
 
 ```bash
-npm install @celom/flume
+npm install @celom/prose
 ```
 
 ## Your first flow
@@ -14,7 +14,7 @@ npm install @celom/flume
 A flow is a sequence of typed steps that process an input and build up state. Use `createFlow` to start a builder, chain steps, and call `.build()`.
 
 ```typescript
-import { createFlow } from '@celom/flume';
+import { createFlow } from '@celom/prose';
 
 const processOrder = createFlow<{ orderId: string }>('process-order')
   .step('fetch', async (ctx) => {
@@ -59,6 +59,6 @@ The result contains the accumulated state from all steps. If any step fails, a `
 
 ## Next steps
 
-- Learn about [Core Concepts](/flume/core-concepts/) to understand how flows, steps, and state work
-- Explore [Guides](/flume/guides/retries/) for specific features like retries, timeouts, and transactions
-- See the [API Reference](/flume/api/create-flow/) for detailed documentation
+- Learn about [Core Concepts](/prose/core-concepts/) to understand how flows, steps, and state work
+- Explore [Guides](/prose/guides/retries/) for specific features like retries, timeouts, and transactions
+- See the [API Reference](/prose/api/create-flow/) for detailed documentation

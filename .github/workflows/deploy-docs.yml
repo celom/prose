@@ -6,7 +6,7 @@ on:
       - main
     paths:
       - 'apps/docs/**'
-      - 'packages/flume/README.md'
+      - 'packages/prose/README.md'
   workflow_dispatch:
 
 permissions:

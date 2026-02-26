@@ -1,4 +1,4 @@
-# Flume
+# Prose
 
 Declarative workflow DSL for orchestrating complex business operations in Javascript/Typescript.
 
@@ -20,7 +20,7 @@ Type-safe state threading, retries with exponential backoff, timeouts, database 
 
 | Package | Description |
 |---------|-------------|
-| [`@celom/flume`](packages/flume/) | Core workflow library |
+| [`@celom/prose`](packages/prose/) | Core workflow library |
 
 ## Development
 
@@ -31,10 +31,10 @@ This is an [Nx](https://nx.dev) monorepo.
 bun install
 
 # run tests
-bun nx test flume
+bun nx test prose
 
 # build
-bun nx build flume
+bun nx build prose
 ```
 
 ## Credits

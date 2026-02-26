@@ -2,7 +2,7 @@
  * Type inference smoke test for FlowBuilder's cons-list internals.
  * This file is NOT meant to be executed — only type-checked.
  *
- * Run: npx tsc --noEmit --project packages/flume/tsconfig.lib.json
+ * Run: npx tsc --noEmit --project packages/prose/tsconfig.lib.json
  */
 
 import { createFlow, type FlowBuilder } from './lib/flow-builder.js';

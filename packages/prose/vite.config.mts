@@ -5,7 +5,7 @@ import * as path from 'path';
 
 export default defineConfig(() => ({
   root: import.meta.dirname,
-  cacheDir: '../../node_modules/.vite/packages/flume',
+  cacheDir: '../../node_modules/.vite/packages/prose',
   plugins: [
     dts({
       entryRoot: 'src',
@@ -28,7 +28,7 @@ export default defineConfig(() => ({
     lib: {
       // Could also be a dictionary or array of multiple entry points.
       entry: 'src/index.ts',
-      name: '@celom/flume',
+      name: '@celom/prose',
       fileName: 'index',
       // Change this to the formats you want to support.
       // Don't forget to update your package.json as well.
@@ -40,7 +40,7 @@ export default defineConfig(() => ({
     },
   },
   test: {
-    name: '@celom/flume',
+    name: '@celom/prose',
     watch: false,
     globals: true,
     environment: 'node',

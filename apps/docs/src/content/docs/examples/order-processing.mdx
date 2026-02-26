@@ -10,7 +10,7 @@ This example demonstrates a realistic order processing pipeline that validates i
 ## The flow
 
 ```typescript
-import { createFlow, ValidationError } from '@celom/flume';
+import { createFlow, ValidationError } from '@celom/prose';
 
 interface OrderInput {
   orderId: string;
@@ -110,7 +110,7 @@ const processOrder = createFlow<OrderInput, OrderDeps>('process-order')
 ## Running the flow
 
 ```typescript
-import { PinoFlowObserver } from '@celom/flume';
+import { PinoFlowObserver } from '@celom/prose';
 
 const result = await processOrder.execute(
   {

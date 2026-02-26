@@ -1,5 +1,5 @@
 {
-  "name": "@celom/flume",
+  "name": "@celom/prose",
   "version": "0.1.1",
   "author": "Carlos Mimoso",
   "description": "Declarative workflow DSL for orchestrating complex business operations in Javascript/Typescript.",
@@ -18,7 +18,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/celom/flume.git"
+    "url": "git+https://github.com/celom/prose.git"
   },
   "private": false,
   "publishConfig": {

@@ -1,9 +1,9 @@
 ---
-title: When to Use Flume
-description: Understand where Flume fits compared to Temporal, Effect-TS, XState, and other tools.
+title: When to Use Prose
+description: Understand where Prose fits compared to Temporal, Effect-TS, XState, and other tools.
 ---
 
-Flume is an **in-process** workflow orchestration library. It runs inside your existing Node.js process with zero external dependencies. Before adopting it, it's worth understanding what it does _not_ try to be.
+Prose is an **in-process** workflow orchestration library. It runs inside your existing Node.js process with zero external dependencies. Before adopting it, it's worth understanding what it does _not_ try to be.
 
 ## Not a durable execution engine
 
@@ -11,23 +11,23 @@ If you need workflows that survive process restarts, resume after hours or days,
 
 ## Not a full effect system
 
-[Effect-TS](https://effect.website) is more powerful in every technical dimension — typed errors in the return signature, type-level dependency injection via Layers, fibers, streams, and a massive standard library. If your team can invest in learning its functional programming model, Effect is the more capable choice. Flume trades that power for simplicity: pure `async`/`await`, no monads, no new paradigms to learn.
+[Effect-TS](https://effect.website) is more powerful in every technical dimension — typed errors in the return signature, type-level dependency injection via Layers, fibers, streams, and a massive standard library. If your team can invest in learning its functional programming model, Effect is the more capable choice. Prose trades that power for simplicity: pure `async`/`await`, no monads, no new paradigms to learn.
 
 ## Not a state machine
 
-[XState](https://stately.ai/docs/xstate) models workflows as finite state machines with explicit states, transitions, and guards — ideal for complex non-linear flows with many possible state transitions. Flume is designed for sequential (or branching) business logic pipelines where a state machine's verbosity would be overhead.
+[XState](https://stately.ai/docs/xstate) models workflows as finite state machines with explicit states, transitions, and guards — ideal for complex non-linear flows with many possible state transitions. Prose is designed for sequential (or branching) business logic pipelines where a state machine's verbosity would be overhead.
 
 ## Not a result type library
 
-Libraries like [neverthrow](https://github.com/supermacro/neverthrow) or [fp-ts](https://github.com/gcanti/fp-ts) encode errors in return types (`Result<T, E>`, `Either<E, A>`). Flume does not — steps throw, and failures are wrapped in `FlowExecutionError`. If typed error channels are critical to you, Effect or neverthrow are better fits.
+Libraries like [neverthrow](https://github.com/supermacro/neverthrow) or [fp-ts](https://github.com/gcanti/fp-ts) encode errors in return types (`Result<T, E>`, `Either<E, A>`). Prose does not — steps throw, and failures are wrapped in `FlowExecutionError`. If typed error channels are critical to you, Effect or neverthrow are better fits.
 
-## Where Flume fits
+## Where Prose fits
 
-Flume is for teams building backend services with multi-step business logic (process an order, onboard a user, handle a payment) who want structured retries, timeouts, transactions, observability, and type-safe state threading — without adopting new infrastructure or a new programming paradigm.
+Prose is for teams building backend services with multi-step business logic (process an order, onboard a user, handle a payment) who want structured retries, timeouts, transactions, observability, and type-safe state threading — without adopting new infrastructure or a new programming paradigm.
 
 | Need | Tool |
 |------|------|
 | Durable workflows, cross-service orchestration | Temporal, Inngest, Trigger.dev |
 | Full effect system with typed errors | Effect-TS |
 | State machines with complex transitions | XState |
-| In-process business logic pipelines | **Flume** |
+| In-process business logic pipelines | **Prose** |

@@ -1,11 +1,11 @@
-# @celom/flume
+# @celom/prose
 
 Declarative workflow DSL for orchestrating complex business operations in Node.js.
 
 Define multi-step business logic as type-safe pipelines with built-in retries, timeouts, transactions, event publishing, and observability — using plain async/await.
 
 ```typescript
-import { createFlow, ValidationError } from '@celom/flume';
+import { createFlow, ValidationError } from '@celom/prose';
 
 const onboardUser = createFlow<{ email: string; name: string }>('onboard-user')
   .validate('checkEmail', (ctx) => {
@@ -35,7 +35,7 @@ const result = await onboardUser.execute(
 ## Install
 
 ```bash
-npm install @celom/flume
+npm install @celom/prose
 ```
 
 ## Features
@@ -59,7 +59,7 @@ npm install @celom/flume
 `createFlow` returns a builder. Chain steps onto it and call `.build()` to get an executable flow.
 
 ```typescript
-import { createFlow } from '@celom/flume';
+import { createFlow } from '@celom/prose';
 
 const flow = createFlow<{ orderId: string }>('process-order')
   .step('fetch', async (ctx) => {
@@ -102,7 +102,7 @@ const result = await flow.execute(
 Validation steps run before processing and are never retried. Throw `ValidationError` to fail fast.
 
 ```typescript
-import { ValidationError } from '@celom/flume';
+import { ValidationError } from '@celom/prose';
 
 flow.validate('checkInput', (ctx) => {
   if (ctx.input.amount <= 0)
@@ -326,7 +326,7 @@ const flow = createFlow<{ token: string }>('protected-action')
 Pass an observer to hook into flow and step lifecycle events.
 
 ```typescript
-import { PinoFlowObserver } from '@celom/flume';
+import { PinoFlowObserver } from '@celom/prose';
 import pino from 'pino';
 
 const logger = pino();
@@ -367,7 +367,7 @@ await flow.execute(input, deps, {
 By default, step errors are wrapped in `FlowExecutionError` and thrown.
 
 ```typescript
-import { FlowExecutionError, ValidationError, TimeoutError } from '@celom/flume';
+import { FlowExecutionError, ValidationError, TimeoutError } from '@celom/prose';
 
 try {
   await flow.execute(input, deps);
@@ -414,19 +414,19 @@ flow.step('example', (ctx) => {
 
 ## What this isn't
 
-Flume is an **in-process** workflow orchestration library. It runs inside your existing Node.js process with zero external dependencies. Before adopting it, it's worth understanding what it does _not_ try to be:
+Prose is an **in-process** workflow orchestration library. It runs inside your existing Node.js process with zero external dependencies. Before adopting it, it's worth understanding what it does _not_ try to be:
 
 **Not a durable execution engine.** If you need workflows that survive process restarts, resume after hours or days, or coordinate across distributed services, look at [Temporal](https://temporal.io), [Inngest](https://www.inngest.com), or [Trigger.dev](https://trigger.dev). These require infrastructure (servers, queues, databases) but give you persistence and replay guarantees that an in-process library fundamentally cannot.
 
-**Not a full effect system.** [Effect-TS](https://effect.website) is more powerful in every technical dimension — typed errors in the return signature, type-level dependency injection via Layers, fibers, streams, and a massive standard library. If your team can invest in learning its functional programming model, Effect is the more capable choice. Flume trades that power for simplicity: pure async/await, no monads, no new paradigms to learn.
+**Not a full effect system.** [Effect-TS](https://effect.website) is more powerful in every technical dimension — typed errors in the return signature, type-level dependency injection via Layers, fibers, streams, and a massive standard library. If your team can invest in learning its functional programming model, Effect is the more capable choice. Prose trades that power for simplicity: pure async/await, no monads, no new paradigms to learn.
 
-**Not a state machine.** [XState](https://stately.ai/docs/xstate) models workflows as finite state machines with explicit states, transitions, and guards — ideal for complex non-linear flows with many possible state transitions. Flume is designed for sequential (or branching) business logic pipelines where a state machine's verbosity would be overhead.
+**Not a state machine.** [XState](https://stately.ai/docs/xstate) models workflows as finite state machines with explicit states, transitions, and guards — ideal for complex non-linear flows with many possible state transitions. Prose is designed for sequential (or branching) business logic pipelines where a state machine's verbosity would be overhead.
 
-**Not a result type library.** Libraries like [neverthrow](https://github.com/supermacro/neverthrow) or [fp-ts](https://github.com/gcanti/fp-ts) encode errors in return types (`Result<T, E>`, `Either<E, A>`). Flume does not — steps throw, and failures are wrapped in `FlowExecutionError`. If typed error channels are critical to you, Effect or neverthrow are better fits.
+**Not a result type library.** Libraries like [neverthrow](https://github.com/supermacro/neverthrow) or [fp-ts](https://github.com/gcanti/fp-ts) encode errors in return types (`Result<T, E>`, `Either<E, A>`). Prose does not — steps throw, and failures are wrapped in `FlowExecutionError`. If typed error channels are critical to you, Effect or neverthrow are better fits.
 
-### Where Flume fits
+### Where Prose fits
 
-Flume is for teams building backend services with multi-step business logic (process an order, onboard a user, handle a payment) who want structured retries, timeouts, transactions, observability, and type-safe state threading — without adopting new infrastructure or a new programming paradigm.
+Prose is for teams building backend services with multi-step business logic (process an order, onboard a user, handle a payment) who want structured retries, timeouts, transactions, observability, and type-safe state threading — without adopting new infrastructure or a new programming paradigm.
 
 ## License
 

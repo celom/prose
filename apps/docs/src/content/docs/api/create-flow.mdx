@@ -55,7 +55,7 @@ Chain builder methods (`.step()`, `.validate()`, etc.) to define the flow, then 
 ## Example
 
 ```typescript
-import { createFlow } from '@celom/flume';
+import { createFlow } from '@celom/prose';
 
 const flow = createFlow<{ email: string }>('onboard-user')
   .step('create', async (ctx) => {

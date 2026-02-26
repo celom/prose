@@ -5,7 +5,7 @@ sidebar:
   order: 5
 ---
 
-Flume lets you publish domain events as part of your flow, keeping event emission co-located with the business logic that produces them.
+Prose lets you publish domain events as part of your flow, keeping event emission co-located with the business logic that produces them.
 
 ## Single event
 
@@ -53,7 +53,7 @@ await flow.execute(input, { db, eventPublisher });
 
 ## Missing event publisher
 
-By default, if an event step runs but no `eventPublisher` dependency is provided, Flume throws an error. You can change this to a warning:
+By default, if an event step runs but no `eventPublisher` dependency is provided, Prose throws an error. You can change this to a warning:
 
 ```typescript
 await flow.execute(input, deps, {

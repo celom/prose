@@ -36,7 +36,7 @@
     },
     "apps/docs": {
       "name": "@celom/docs",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "dependencies": {
         "@astrojs/starlight": "^0.37.6",
         "@astrojs/tailwind": "^6.0.0",
@@ -48,9 +48,9 @@
         "pagefind": "^1.4.0",
       },
     },
-    "packages/flume": {
-      "name": "@celom/flume",
-      "version": "0.0.1",
+    "packages/prose": {
+      "name": "@celom/prose",
+      "version": "0.1.1",
     },
   },
   "packages": {
@@ -280,7 +280,7 @@
 
     "@celom/docs": ["@celom/docs@workspace:apps/docs"],
 
-    "@celom/flume": ["@celom/flume@workspace:packages/flume"],
+    "@celom/prose": ["@celom/prose@workspace:packages/prose"],
 
     "@csstools/color-helpers": ["@csstools/color-helpers@6.0.2", "", {}, "sha512-LMGQLS9EuADloEFkcTBR3BwV/CGHV7zyDxVRtVDTwdI2Ca4it0CCVTT9wCkxSgokjE5Ho41hEPgb8OEUwoXr6Q=="],
 

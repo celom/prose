@@ -7,14 +7,14 @@ sidebar:
 
 ## Error types
 
-Flume provides three error classes for different failure modes.
+Prose provides three error classes for different failure modes.
 
 ### `FlowExecutionError`
 
 Thrown when a step fails during execution. Wraps the original error with context.
 
 ```typescript
-import { FlowExecutionError } from '@celom/flume';
+import { FlowExecutionError } from '@celom/prose';
 
 try {
   await flow.execute(input, deps);
@@ -32,7 +32,7 @@ try {
 Thrown by `.validate()` steps for input validation failures. Carries field-level details.
 
 ```typescript
-import { ValidationError } from '@celom/flume';
+import { ValidationError } from '@celom/prose';
 
 // Single field
 throw ValidationError.single('email', 'Invalid email');
@@ -51,7 +51,7 @@ throw new ValidationError('Validation failed', [
 Thrown when a flow or step exceeds its configured timeout.
 
 ```typescript
-import { TimeoutError } from '@celom/flume';
+import { TimeoutError } from '@celom/prose';
 
 try {
   await flow.execute(input, deps, { timeout: 5_000 });

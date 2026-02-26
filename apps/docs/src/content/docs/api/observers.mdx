@@ -28,7 +28,7 @@ interface FlowObserver {
 Console-based logging. Accepts an optional logger interface.
 
 ```typescript
-import { DefaultObserver } from '@celom/flume';
+import { DefaultObserver } from '@celom/prose';
 
 // Uses console by default
 const observer = new DefaultObserver();
@@ -46,7 +46,7 @@ const observer = new DefaultObserver({
 Silent observer — all hooks are no-ops. Useful as a default value to avoid null checks.
 
 ```typescript
-import { NoOpObserver } from '@celom/flume';
+import { NoOpObserver } from '@celom/prose';
 
 const observer = new NoOpObserver();
 ```
@@ -56,7 +56,7 @@ const observer = new NoOpObserver();
 Structured JSON logging with any Pino-compatible logger.
 
 ```typescript
-import { PinoFlowObserver } from '@celom/flume';
+import { PinoFlowObserver } from '@celom/prose';
 import pino from 'pino';
 
 const observer = new PinoFlowObserver(pino());

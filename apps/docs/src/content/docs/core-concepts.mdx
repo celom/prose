@@ -1,6 +1,6 @@
 ---
 title: Core Concepts
-description: Understand how flows, steps, state threading, and the builder pattern work in Flume.
+description: Understand how flows, steps, state threading, and the builder pattern work in Prose.
 ---
 
 ## Flows
@@ -8,7 +8,7 @@ description: Understand how flows, steps, state threading, and the builder patte
 A **flow** is a named sequence of steps that processes an input and produces an output. Think of it as a typed pipeline for business operations — order processing, user onboarding, payment handling, etc.
 
 ```typescript
-import { createFlow } from '@celom/flume';
+import { createFlow } from '@celom/prose';
 
 const flow = createFlow<{ email: string }>('onboard-user');
 ```
@@ -32,7 +32,7 @@ const flow = createFlow<{ email: string }>('onboard-user')
   .build();
 ```
 
-Flume provides several step types:
+Prose provides several step types:
 
 | Method | Purpose |
 |--------|---------|
@@ -44,7 +44,7 @@ Flume provides several step types:
 
 ## State threading
 
-The core design of Flume is **type-safe state threading**. Each step's return value is shallow-merged into the accumulated state, and TypeScript tracks the types through the entire chain.
+The core design of Prose is **type-safe state threading**. Each step's return value is shallow-merged into the accumulated state, and TypeScript tracks the types through the entire chain.
 
 ```typescript
 createFlow<{ orderId: string }>('process-order')
@@ -168,4 +168,4 @@ const flow = createFlow<{ token: string }>('protected')
   .build();
 ```
 
-See the [Sub-flows guide](/flume/guides/sub-flows/) for more details.
+See the [Sub-flows guide](/prose/guides/sub-flows/) for more details.

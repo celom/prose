@@ -8,7 +8,7 @@ sidebar:
 Pass an observer to `.execute()` to hook into lifecycle events for logging, metrics, or distributed tracing.
 
 ```typescript
-import { PinoFlowObserver } from '@celom/flume';
+import { PinoFlowObserver } from '@celom/prose';
 import pino from 'pino';
 
 const logger = pino();
@@ -53,7 +53,7 @@ await flow.execute(input, deps, {
 Console logging with an optional custom logger interface.
 
 ```typescript
-import { DefaultObserver } from '@celom/flume';
+import { DefaultObserver } from '@celom/prose';
 
 const observer = new DefaultObserver();
 // or with a custom logger:
@@ -65,7 +65,7 @@ const observer = new DefaultObserver(myLogger);
 Silent observer that does nothing. Useful as a default value.
 
 ```typescript
-import { NoOpObserver } from '@celom/flume';
+import { NoOpObserver } from '@celom/prose';
 
 const observer = new NoOpObserver();
 ```
@@ -75,7 +75,7 @@ const observer = new NoOpObserver();
 Structured logging with any Pino-compatible logger (including Fastify's `request.log`).
 
 ```typescript
-import { PinoFlowObserver } from '@celom/flume';
+import { PinoFlowObserver } from '@celom/prose';
 import pino from 'pino';
 
 const observer = new PinoFlowObserver(pino());

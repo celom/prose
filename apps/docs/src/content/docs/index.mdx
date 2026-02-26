@@ -1,16 +1,16 @@
 ---
-title: Flume
+title: Prose
 description: Declarative workflow DSL for orchestrating complex business operations in TypeScript
 template: splash
 hero:
   tagline: Type-safe workflow pipelines with retries, timeouts, transactions, events, and observability — using plain async/await with zero dependencies.
   actions:
     - text: Get Started
-      link: /flume/getting-started/
+      link: /prose/getting-started/
       icon: right-arrow
       variant: primary
     - text: View on GitHub
-      link: https://github.com/celom/flume
+      link: https://github.com/celom/prose
       icon: external
       variant: minimal
 ---
@@ -49,7 +49,7 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
 ## Quick Example
 
 ```typescript
-import { createFlow, ValidationError } from '@celom/flume';
+import { createFlow, ValidationError } from '@celom/prose';
 
 const onboardUser = createFlow<{ email: string; name: string }>('onboard-user')
   .validate('checkEmail', (ctx) => {
@@ -79,5 +79,5 @@ const result = await onboardUser.execute(
 ## Install
 
 ```bash
-npm install @celom/flume
+npm install @celom/prose
 ```

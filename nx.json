@@ -57,7 +57,7 @@
     }
   ],
   "release": {
-    "projects": ["flume"],
+    "projects": ["prose"],
     "version": {
       "conventionalCommits": true
     },

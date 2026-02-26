@@ -106,7 +106,7 @@ Short-circuit the flow. If `condition(ctx)` returns `true`, all remaining steps 
 
 ### `.withRetry(options)`
 
-Add a retry policy to the **last** step. See [Retries guide](/flume/guides/retries/) for full options.
+Add a retry policy to the **last** step. See [Retries guide](/prose/guides/retries/) for full options.
 
 ```typescript
 .withRetry({
@@ -127,7 +127,7 @@ Apply a builder transformation function. Used for reusable sub-flows.
 .pipe(withAuditLog)
 ```
 
-See [Sub-flows guide](/flume/guides/sub-flows/) for details.
+See [Sub-flows guide](/prose/guides/sub-flows/) for details.
 
 ### `.map(mapper)`
 

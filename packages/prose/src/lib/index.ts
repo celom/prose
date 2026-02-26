@@ -1,5 +1,5 @@
 /**
- * @celom/flume - Declarative workflow DSL for orchestrating complex business operations
+ * @celom/prose - Declarative workflow DSL for orchestrating complex business operations
  */
 
 // Export core types
