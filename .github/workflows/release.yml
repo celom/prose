@@ -48,4 +48,7 @@ jobs:
         run: git push --follow-tags
 
       - if: steps.release.outputs.new_release == 'true'
+        run: bunx nx run prose:build
+
+      - if: steps.release.outputs.new_release == 'true'
         run: npm run publish -- --access public
