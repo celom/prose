@@ -34,4 +34,4 @@ jobs:
         env:
           NX_DAEMON: false
 
-      - run: npm publish packages/prose --provenance --access public
+      - run: npm run publish -- --provenance --access public
