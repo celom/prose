@@ -13,6 +13,7 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    # environment: release
     steps:
       - uses: actions/checkout@v4
         with:
@@ -23,7 +24,9 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          registry-url: https://registry.npmjs.org
+          node-version: lts/*
+
+      - run: npm install -g npm@latest
 
       - run: bun install --frozen-lockfile
 
@@ -34,4 +37,4 @@ jobs:
         env:
           NX_DAEMON: false
 
-      - run: npm run publish -- --provenance --access public
+      - run: npm run publish -- --access public
