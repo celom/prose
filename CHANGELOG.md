@@ -1,3 +1,13 @@
+## 0.2.0 (2026-02-26)
+
+### 🚀 Features
+
+- add transaction type inference and example workflow for order fulfillment ([d6e1c65](https://github.com/celom/prose/commit/d6e1c65))
+
+### ❤️ Thank You
+
+- Carlos Mimoso
+
 ## 0.1.4 (2026-02-26)
 
 ### 🩹 Fixes
