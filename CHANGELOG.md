@@ -1,3 +1,13 @@
+## 0.2.1 (2026-02-26)
+
+### 🩹 Fixes
+
+- fix transaction client type inference in DatabaseClient and FlowBuilder ([fa3d8da](https://github.com/celom/prose/commit/fa3d8da))
+
+### ❤️ Thank You
+
+- Carlos Mimoso
+
 ## 0.2.0 (2026-02-26)
 
 ### 🚀 Features
