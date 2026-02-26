@@ -84,6 +84,7 @@ export class FlowBuilder<
       this.name,
       { head: { name, type: 'validate', handler }, tail: this.steps },
       this.length + 1,
+      this.outputMapper,
     );
   }
 
@@ -101,6 +102,7 @@ export class FlowBuilder<
       this.name,
       { head: { name, type: 'step', handler, retryOptions }, tail: this.steps },
       this.length + 1,
+      this.outputMapper,
     );
   }
 
@@ -119,6 +121,7 @@ export class FlowBuilder<
       this.name,
       { head: { name, type: 'step', handler, condition, retryOptions }, tail: this.steps },
       this.length + 1,
+      this.outputMapper,
     );
   }
 
@@ -138,6 +141,7 @@ export class FlowBuilder<
         head: { name, type: 'transaction', handler }, tail: this.steps
       },
       this.length + 1,
+      this.outputMapper,
     );
   }
 
@@ -159,6 +163,7 @@ export class FlowBuilder<
       this.name,
       { head: { name, type: 'event', channel, handler: builder }, tail: this.steps },
       this.length + 1,
+      this.outputMapper,
     );
   }
 
@@ -197,6 +202,7 @@ export class FlowBuilder<
       this.name,
       { head: { name, type: 'event', channel, handler: combinedBuilder }, tail: this.steps },
       this.length + 1,
+      this.outputMapper,
     );
   }
 
@@ -330,6 +336,7 @@ export class FlowBuilder<
         tail: this.steps,
       },
       this.length + 1,
+      this.outputMapper,
     );
   }
 
