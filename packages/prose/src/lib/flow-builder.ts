@@ -9,21 +9,12 @@ import type {
   BaseFlowDependencies,
   FlowEvent,
   MergeStrategy,
+  TxClient,
 } from './types.js';
 import { FlowExecutor } from './flow-executor.js';
 import { deepMerge } from './utils.js';
 
 type StepNode<T> = { readonly head: T; readonly tail: StepNode<T> | null };
-
-/**
- * Infer the transaction client type from the deps' db.transaction signature.
- * Falls back to `unknown` when TDeps is `never` or db is absent/untyped.
- */
-type InferTransactionClient<TDeps> = [TDeps] extends [never]
-  ? unknown
-  : TDeps extends { db: { transaction(fn: (tx: infer Tx) => any): any } }
-    ? Tx
-    : unknown;
 
 /**
  * Converts a union type to an intersection type.
@@ -142,7 +133,7 @@ export class FlowBuilder<
     name: string,
     handler: (
       ctx: FlowContext<TInput, TDeps, TState>,
-      tx: InferTransactionClient<TDeps>,
+      tx: [TDeps] extends [never] ? unknown : TxClient<NonNullable<TDeps['db']>>,
     ) => TResult | Promise<TResult>,
   ): FlowBuilder<TInput, TDeps, TResult & TState, TMapperOutput, TBreakOutputs> {
     return new FlowBuilder<TInput, TDeps, TResult & TState, TMapperOutput, TBreakOutputs>(

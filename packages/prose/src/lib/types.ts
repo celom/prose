@@ -11,20 +11,41 @@ import { FlowObserver } from './observer.js';
 /**
  * A database client capable of running transactions.
  *
+ * Generic over the transaction client type so the full chain
+ * `DatabaseClient<TTx>` → `TxClient<TDb>` stays connected.
+ *
  * Any ORM / driver that exposes a `transaction()` method satisfies this
  * (e.g. Drizzle, Knex, Prisma).
+ *
+ * @example
+ * ```ts
+ * // Untyped (backward compatible) — tx is unknown
+ * const deps: { db: DatabaseClient } = ...;
+ *
+ * // Typed — tx carries your ORM's transaction type
+ * const deps: { db: DatabaseClient<DrizzleTx> } = ...;
+ * ```
  */
-export interface DatabaseClient {
-  transaction<T>(fn: (tx: TransactionClient) => Promise<T>): Promise<T>;
+export interface DatabaseClient<TTx = unknown> {
+  transaction<T>(fn: (tx: TTx) => Promise<T>): Promise<T>;
 }
 
 /**
- * The transaction client passed into transaction step handlers.
+ * Extract the transaction client type from a database client.
  *
- * Intentionally opaque so consumers can narrow it to their ORM's
- * transaction type via the generic parameter on `.transaction()`.
+ * Works with any ORM that exposes `transaction(fn: (tx: T) => ...)`:
+ * Drizzle, Prisma, Knex, etc.
+ *
+ * @example
+ * ```ts
+ * type MyTx = TxClient<typeof db>;
+ * // → the type your ORM passes to transaction callbacks
+ * ```
  */
-export type TransactionClient = unknown;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type TxClient<TDb> = TDb extends { transaction(fn: (tx: infer Tx) => any): any }
+  ? Tx
+  : never;
 
 // ──────────────────────────────────────────────────────────
 // Event interfaces
@@ -175,7 +196,7 @@ export interface TransactionStepDefinition<
   type: 'transaction';
   handler: (
     ctx: FlowContext<TInput, TDeps, TState>,
-    tx: TransactionClient,
+    tx: unknown,
   ) => unknown | Promise<unknown>;
 }
 
