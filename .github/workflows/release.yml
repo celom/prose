@@ -33,8 +33,16 @@ jobs:
       - run: git config user.name "github-actions[bot]"
       - run: git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - run: bunx nx release --skip-publish
+      - id: release
+        run: |
+          BEFORE=$(git rev-parse HEAD)
+          bunx nx release --skip-publish
+          AFTER=$(git rev-parse HEAD)
+          if [ "$BEFORE" != "$AFTER" ]; then
+            echo "new_release=true" >> $GITHUB_OUTPUT
+          fi
         env:
           NX_DAEMON: false
 
-      - run: npm run publish -- --access public
+      - if: steps.release.outputs.new_release == 'true'
+        run: npm run publish -- --access public
