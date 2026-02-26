@@ -1,6 +1,6 @@
 {
   "name": "@celom/prose",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "author": "Carlos Mimoso",
   "description": "Declarative workflow DSL for orchestrating complex business operations in Javascript/Typescript.",
   "keywords": [
