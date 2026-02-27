@@ -7,7 +7,7 @@
       "path": "./packages/prose"
     },
     {
-      "path": "./apps/docs"
+      "path": "./packages/prose-mcp"
     }
   ]
 }

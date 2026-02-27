@@ -57,7 +57,8 @@
     }
   ],
   "release": {
-    "projects": ["prose"],
+    "projects": ["prose", "prose-mcp"],
+    "projectsRelationship": "fixed",
     "version": {
       "conventionalCommits": true
     },
