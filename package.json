@@ -8,9 +8,7 @@
     "url": "git+https://github.com/celom/prose.git"
   },
   "homepage": "https://celom.github.io/prose/",
-  "scripts": {
-    "publish": "npm publish ./packages/prose"
-  },
+  "scripts": {},
   "private": true,
   "dependencies": {},
   "devDependencies": {

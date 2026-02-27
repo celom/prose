@@ -16,7 +16,7 @@ import { deepMerge } from './utils.js';
 type StepNode<T> = { readonly head: T; readonly tail: StepNode<T> | null };
 
 /**
- * Converts a union type to an intersection type.
+ * Converts a union type to an intersection type. 
  * Used to merge return types from parallel/sequence handlers.
  */
 type UnionToIntersection<U> = (

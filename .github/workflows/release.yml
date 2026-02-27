@@ -1,9 +1,10 @@
 name: Release
 
 on:
-  push:
-    branches:
-      - main
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -12,6 +13,7 @@ permissions:
 
 jobs:
   release:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     environment: release
     steps:
@@ -48,7 +50,7 @@ jobs:
         run: git push --follow-tags
 
       - if: steps.release.outputs.new_release == 'true'
-        run: bunx nx run prose:build
+        run: bunx nx run-many -t build -p prose prose-mcp
 
       - if: steps.release.outputs.new_release == 'true'
-        run: npm run publish -- --access public
+        run: npx nx release publish
