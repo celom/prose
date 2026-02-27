@@ -16,15 +16,6 @@ import { FlowObserver } from './observer.js';
  *
  * Any ORM / driver that exposes a `transaction()` method satisfies this
  * (e.g. Drizzle, Knex, Prisma).
- *
- * @example
- * ```ts
- * // Untyped (backward compatible) — tx is unknown
- * const deps: { db: DatabaseClient } = ...;
- *
- * // Typed — tx carries your ORM's transaction type
- * const deps: { db: DatabaseClient<DrizzleTx> } = ...;
- * ```
  */
 export interface DatabaseClient<TTx = unknown> {
   transaction<T>(fn: (tx: TTx) => Promise<T>): Promise<T>;
@@ -35,15 +26,10 @@ export interface DatabaseClient<TTx = unknown> {
  *
  * Works with any ORM that exposes `transaction(fn: (tx: T) => ...)`:
  * Drizzle, Prisma, Knex, etc.
- *
- * @example
- * ```ts
- * type MyTx = TxClient<typeof db>;
- * // → the type your ORM passes to transaction callbacks
- * ```
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type TxClient<TDb> = TDb extends { transaction(fn: (tx: infer Tx) => any): any }
+export type TxClient<TDb extends DatabaseClient = DatabaseClient> = TDb extends {
+  transaction<T>(fn: (tx: infer Tx) => Promise<T>): Promise<T>;
+}
   ? Tx
   : never;
 
