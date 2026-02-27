@@ -1,6 +1,6 @@
 {
   "name": "@celom/prose-mcp",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "license": "MIT",
   "author": "Carlos Mimoso",
   "description": "MCP server for @celom/prose — helps AI assistants write correct workflow code",
