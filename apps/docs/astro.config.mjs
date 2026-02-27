@@ -23,6 +23,9 @@ export default defineConfig({
       editLink: {
         baseUrl: 'https://github.com/celom/prose/edit/main/apps/docs/',
       },
+      components: {
+        SiteTitle: './src/components/SiteTitle.astro',
+      },
       customCss: ['./src/styles/custom.css'],
       sidebar: [
         {
@@ -30,6 +33,7 @@ export default defineConfig({
           items: [
             { label: 'Getting Started', slug: 'getting-started' },
             { label: 'Core Concepts', slug: 'core-concepts' },
+            { label: 'When to Use Prose', slug: 'comparison' },
           ],
         },
         {
@@ -44,7 +48,7 @@ export default defineConfig({
           label: 'Examples',
           autogenerate: { directory: 'examples' },
         },
-        { label: 'When to Use Prose', slug: 'comparison' },
+        { label: 'MCP Server', slug: 'mcp' },
         { label: 'Credits', slug: 'credits' },
       ],
     }),

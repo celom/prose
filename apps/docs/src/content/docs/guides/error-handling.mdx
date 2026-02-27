@@ -2,7 +2,7 @@
 title: Error Handling
 description: Handle errors with typed error classes, partial state recovery, and configurable behavior.
 sidebar:
-  order: 9
+  order: 8
 ---
 
 ## Error types
@@ -44,7 +44,7 @@ throw new ValidationError('Validation failed', [
 ]);
 ```
 
-`ValidationError` has an `.issues` property with an array of `{ field, message }` objects and a `.toJSON()` method for serialization.
+`ValidationError` has an `.issues` property with an array of `{ field, message, value? }` objects and a `.toJSON()` method for serialization.
 
 ### `TimeoutError`
 

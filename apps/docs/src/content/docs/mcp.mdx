@@ -1,0 +1,143 @@
+---
+title: MCP Server
+description: Give AI assistants deep knowledge of @celom/prose with the MCP server.
+---
+
+The `@celom/prose-mcp` package is a [Model Context Protocol](https://modelcontextprotocol.io/) server that gives AI assistants (Claude, Cursor, Windsurf, etc.) direct access to Prose API documentation, code generation tools, and validation — so they write correct workflow code without hallucinating APIs.
+
+## Setup
+
+No installation required. Add the server to your MCP client configuration and it runs automatically via `npx`.
+
+### Claude Desktop
+
+Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
+
+```json
+{
+  "mcpServers": {
+    "prose": {
+      "command": "npx",
+      "args": ["-y", "@celom/prose-mcp@latest"]
+    }
+  }
+}
+```
+
+### Claude Code
+
+Add a `.mcp.json` file to your project root:
+
+```json
+{
+  "mcpServers": {
+    "prose": {
+      "command": "npx",
+      "args": ["-y", "@celom/prose-mcp@latest"]
+    }
+  }
+}
+```
+
+### Cursor / Windsurf
+
+These editors support MCP servers through their settings. Add the same configuration — check your editor's docs for the exact location.
+
+:::tip
+Use `@latest` to ensure you always get the most recent version. Without it, `npx` may serve a cached older version.
+:::
+
+## What it provides
+
+### Resources
+
+The server exposes Prose documentation as MCP resources that AI assistants can read on demand.
+
+| Resource | Description |
+|----------|-------------|
+| `prose://api/quick-reference` | Concise cheatsheet of all methods, types, and patterns |
+| `prose://api/create-flow` | `createFlow()` API reference |
+| `prose://api/flow-builder` | All FlowBuilder methods |
+| `prose://api/types` | Type reference (FlowContext, RetryOptions, etc.) |
+| `prose://api/execution-options` | Options passed to `flow.execute()` |
+| `prose://api/error-types` | ValidationError, FlowExecutionError, TimeoutError |
+| `prose://api/observers` | FlowObserver interface and built-in implementations |
+| `prose://guides/{topic}` | Feature guides (retries, transactions, events, and more) |
+| `prose://examples/{name}` | Complete worked examples |
+
+### Tools
+
+Four tools are available for code generation, analysis, and validation.
+
+#### `scaffold_flow`
+
+Generates a complete flow definition from structured input. Give it a name, input fields, dependencies, and steps — it returns ready-to-use TypeScript with proper types and TODO comments.
+
+```
+Input: name, inputFields, dependencies, steps, hasMapOutput, hasBreakIf
+Output: Complete TypeScript flow code
+```
+
+#### `analyze_flow`
+
+Parses a flow's source code and extracts its structure: flow name, step list with types, retry configuration, dependency requirements, and potential issues.
+
+```
+Input: sourceCode (TypeScript containing a flow definition)
+Output: Structured analysis with step table and issue warnings
+```
+
+#### `validate_flow_pattern`
+
+Checks flow code for common mistakes:
+
+- Missing `.build()` call
+- `.map()` after `.build()` (must come before)
+- `.withRetry()` on validate steps (validation is never retried)
+- Duplicate step names
+- `await` in non-async handlers
+- Missing dependency types for `.transaction()` or `.event()`
+
+```
+Input: sourceCode
+Output: List of errors and warnings with line numbers
+```
+
+#### `list_flows`
+
+Scans a project directory for files containing `@celom/prose` flow definitions and returns a summary of each flow found.
+
+```
+Input: directory, maxDepth (optional)
+Output: List of flows with file paths, step counts, and step names
+```
+
+### Prompts
+
+Two prompts guide the AI through complex tasks.
+
+#### `design-flow`
+
+Interactive assistant for designing a new workflow. Describe the business operation and any constraints — the AI walks through input types, dependencies, step ordering, retry strategy, and generates the code.
+
+#### `debug-flow`
+
+Debugging helper. Paste flow code and describe the problem — the AI checks for common issues like state threading errors, retry placement, timeout configuration, and missing dependencies.
+
+## How it works
+
+The MCP server runs as a local process over stdio. It has **no runtime dependency** on `@celom/prose` — it serves embedded documentation and generates code strings. This means it works even in projects that haven't installed Prose yet.
+
+When an AI assistant needs to write or understand Prose code, it can:
+
+1. Read the quick-reference resource for an overview
+2. Read specific API or guide resources for detailed information
+3. Use `scaffold_flow` to generate boilerplate
+4. Use `validate_flow_pattern` to check the result
+5. Use `analyze_flow` to understand existing flows in the codebase
+
+## Updating
+
+The MCP server version is independent of the `@celom/prose` library version. When new features are added to Prose, a corresponding update to `@celom/prose-mcp` is published with updated documentation.
+
+With `@latest` in your configuration, restarting the AI client picks up the new version automatically.

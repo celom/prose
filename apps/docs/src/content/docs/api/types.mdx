@@ -10,7 +10,7 @@ sidebar:
 Passed to every step handler.
 
 ```typescript
-interface FlowContext<TInput, TDeps, TState> {
+interface FlowContext<TInput, TDeps extends BaseFlowDependencies, TState> {
   readonly input: Readonly<TInput>;
   state: TState;
   deps: TDeps;
@@ -27,6 +27,27 @@ interface FlowContext<TInput, TDeps, TState> {
 | `meta` | Runtime metadata (see `FlowMeta`). |
 | `signal` | Combined abort signal from flow timeout, step timeout, and external signal. |
 
+## `BaseFlowDependencies`
+
+The base contract for flow dependencies. Both `db` and `eventPublisher` are optional — you only need to provide them when your flow uses `.transaction()` or `.event()` steps respectively.
+
+```typescript
+type BaseFlowDependencies = {
+  db?: DatabaseClient;
+  eventPublisher?: FlowEventPublisher;
+};
+```
+
+Extend this with your own dependencies:
+
+```typescript
+type MyDeps = {
+  db: DrizzleClient;
+  eventPublisher: MyPublisher;
+  logger: Logger;
+};
+```
+
 ## `FlowMeta`
 
 Runtime metadata available via `ctx.meta`.
@@ -34,9 +55,9 @@ Runtime metadata available via `ctx.meta`.
 ```typescript
 interface FlowMeta {
   flowName: string;
-  currentStep: string;
   startedAt: Date;
-  correlationId: string;
+  currentStep?: string;
+  correlationId?: string;
 }
 ```
 
@@ -62,10 +83,11 @@ The object returned by event builders, enriched with metadata before publishing.
 ```typescript
 interface FlowEvent {
   eventType: string;
-  correlationId?: string;
   [key: string]: unknown;
 }
 ```
+
+The `correlationId` is automatically added by Prose before publishing — you don't need to include it in your event builders.
 
 ## `FlowEventPublisher`
 
@@ -79,17 +101,34 @@ interface FlowEventPublisher {
 
 ## `DatabaseClient`
 
-Interface for the `db` dependency used by `.transaction()` steps.
+Interface for the `db` dependency used by `.transaction()` steps. The `TTx` generic parameter represents your ORM's native transaction type.
 
 ```typescript
-interface DatabaseClient {
-  transaction<T>(fn: (tx: TransactionClient) => Promise<T>): Promise<T>;
+interface DatabaseClient<TTx = unknown> {
+  transaction<T>(fn: (tx: TTx) => Promise<T>): Promise<T>;
 }
 ```
 
-## `TransactionClient`
+When you provide a typed `DatabaseClient` (e.g. from Drizzle), Prose infers `TTx` and passes it as the `tx` argument in `.transaction()` step handlers — no manual casting needed.
 
-The transaction client passed to `.transaction()` step handlers. This is an opaque type — it matches whatever your ORM's transaction callback provides.
+## `TxClientOf`
+
+Utility type that extracts the transaction client type from your dependencies. Useful when extracting transaction step handlers into standalone functions.
+
+```typescript
+type TxClientOf<TDeps extends BaseFlowDependencies> =
+  TDeps extends { db: DatabaseClient<infer TTx> } ? TTx : unknown;
+```
+
+Define it once in your application types and reuse across extracted step functions:
+
+```typescript
+import type { TxClientOf } from '@celom/prose';
+
+type Tx = TxClientOf<AppDeps>; // e.g. DrizzleTransaction
+```
+
+See the [transactions guide](/guides/transactions#extracting-transaction-steps) for the full pattern.
 
 ## `MergeStrategy`
 
@@ -107,5 +146,6 @@ Field-level validation error detail.
 interface ValidationIssue {
   field: string;
   message: string;
+  value?: unknown;
 }
 ```

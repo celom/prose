@@ -35,8 +35,8 @@ const observer = new DefaultObserver();
 
 // Custom logger
 const observer = new DefaultObserver({
-  info: (msg) => myLogger.info(msg),
-  error: (msg) => myLogger.error(msg),
+  debug: (msg) => myLogger.debug(msg),
+  error: (msg, err) => myLogger.error(msg, err),
   warn: (msg) => myLogger.warn(msg),
 });
 ```

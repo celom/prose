@@ -8,7 +8,7 @@ sidebar:
 ## Signature
 
 ```typescript
-function createFlow<TInput, TDeps = Record<string, unknown>>(
+function createFlow<TInput, TDeps extends BaseFlowDependencies = never>(
   name: string
 ): FlowBuilder<TInput, TDeps, {}, never>
 ```
@@ -33,7 +33,9 @@ const flow = createFlow<{ orderId: string; userId: string }>('process-order');
 
 ### `TDeps`
 
-The shape of the dependencies object passed as the second argument to `.execute()`. Defaults to `Record<string, unknown>`.
+The shape of the dependencies object passed as the second argument to `.execute()`. Must extend `BaseFlowDependencies`, which optionally includes `db?: DatabaseClient` and `eventPublisher?: FlowEventPublisher`. Provide them when your flow uses `.transaction()` or `.event()` steps.
+
+Defaults to `never` — when you omit `TDeps`, TypeScript won't require any specific dependencies. Once you use `.transaction()` or `.event()` steps, you'll need to provide a concrete type that satisfies the contract.
 
 ```typescript
 type Deps = {

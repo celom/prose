@@ -2,7 +2,7 @@
 title: Retries
 description: Add per-step retry policies with exponential backoff to handle transient failures.
 sidebar:
-  order: 1
+  order: 6
 ---
 
 Chain `.withRetry()` after any step to add a retry policy. This is ideal for steps that call external APIs or services where transient failures are expected.
@@ -29,8 +29,8 @@ flow
 |--------|------|---------|-------------|
 | `maxAttempts` | `number` | — | Total attempts including the first |
 | `delayMs` | `number` | — | Initial delay between retries (ms) |
-| `backoffMultiplier` | `number` | `1` | Multiplier applied to delay after each retry |
-| `maxDelayMs` | `number` | `Infinity` | Upper bound on delay |
+| `backoffMultiplier` | `number` | — | Multiplier applied to delay after each retry. Without this, the delay is fixed. |
+| `maxDelayMs` | `number` | — | Upper bound on delay |
 | `shouldRetry` | `(error) => boolean` | — | Predicate to conditionally retry |
 | `stepTimeout` | `number` | — | Timeout override for this step (ms) |
 

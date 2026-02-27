@@ -39,7 +39,7 @@ Prose provides several step types:
 | `.step()` | Regular step — runs always, returns state to merge |
 | `.validate()` | Validation step — runs before processing, never retried |
 | `.stepIf()` | Conditional step — runs only when condition is true |
-| `.transaction()` | Transaction step — wraps handler in `db.transaction()` |
+| `.transaction()` | Transaction step — wraps handler in `deps.db.transaction()`, passing the ORM's native transaction client as `tx` |
 | `.parallel()` | Parallel step — runs multiple handlers concurrently |
 
 ## State threading
@@ -92,7 +92,7 @@ The accumulated state from all prior steps. Each step's return value is shallow-
 
 ### `ctx.deps`
 
-Dependencies injected via the second argument to `.execute()`. Common examples include database clients, event publishers, and external API clients.
+Dependencies injected via the second argument to `.execute()`. Prose defines a base contract (`BaseFlowDependencies`) with optional `db?: DatabaseClient` and `eventPublisher?: FlowEventPublisher` properties — provide them when your flow uses `.transaction()` or `.event()` steps. You extend this with your own dependencies (API clients, repositories, etc). See [Types](/prose/api/types/) and [Database Transactions](/prose/guides/transactions/) for details.
 
 ### `ctx.meta`
 
@@ -100,10 +100,10 @@ Runtime metadata about the current execution:
 
 ```typescript
 interface FlowMeta {
-  flowName: string;        // the flow's name
-  currentStep: string;     // current step name
-  startedAt: Date;         // when the flow started
-  correlationId: string;   // auto-generated or custom
+  flowName: string;         // the flow's name
+  startedAt: Date;          // when the flow started
+  currentStep?: string;     // current step name
+  correlationId?: string;   // custom, passed via execute options
 }
 ```
 

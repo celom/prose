@@ -1,0 +1,255 @@
+---
+title: Project Structure
+description: An opinionated guide for organizing flows, steps, and dependencies into testable, auditable modules.
+sidebar:
+  order: 10
+---
+
+This guide presents an opinionated convention for structuring your flows. The goal is to enforce a clear separation of concerns where every step is a pure, testable function with an explicit contract for its inputs and dependencies.
+
+## The principle
+
+**The flow definition is the specification.** It should be the first thing you create — a readable contract that declares what happens, in what order, and what each step requires. The implementation details of each step live in their own modules.
+
+```
+src/flows/process-order/
+├── flow.ts            ← the contract (create this first)
+├── types.ts           ← input, dependencies, and shared types
+└── steps/
+    ├── validate-order.ts
+    ├── calculate-total.ts
+    ├── charge-payment.ts
+    └── persist-order.ts
+```
+
+## 1. Start with the types
+
+Define the flow's input shape and dependency interfaces. This is the boundary contract — what callers must provide and what external services the flow depends on.
+
+```typescript
+// flows/process-order/types.ts
+import type { DatabaseClient, FlowEventPublisher } from '@celom/prose';
+
+export interface OrderInput {
+  orderId: string;
+  userId: string;
+  items: Array<{ sku: string; quantity: number; price: number }>;
+}
+
+export interface OrderDeps {
+  db: DatabaseClient;
+  eventPublisher: FlowEventPublisher;
+  paymentGateway: PaymentGateway;
+}
+
+export interface PaymentGateway {
+  charge(amount: number, userId: string): Promise<{ receiptId: string }>;
+}
+```
+
+## 2. Define the flow as a contract
+
+The flow file imports its types and step handlers, then wires them together. Reading this file tells you everything about the operation without implementation noise.
+
+```typescript
+// flows/process-order/flow.ts
+import { createFlow } from '@celom/prose';
+import type { OrderInput, OrderDeps } from './types';
+import { validateOrder } from './steps/validate-order';
+import { calculateTotal } from './steps/calculate-total';
+import { chargePayment } from './steps/charge-payment';
+import { persistOrder } from './steps/persist-order';
+
+export const processOrder = createFlow<OrderInput, OrderDeps>('process-order')
+  .validate('validateOrder', validateOrder)
+  .step('calculateTotal', calculateTotal)
+  .step('chargePayment', chargePayment)
+    .withRetry({ maxAttempts: 3, delayMs: 500 })
+  .transaction('persistOrder', persistOrder)
+  .event('orderCreated', (ctx) => ({
+    channel: 'orders',
+    event: {
+      type: 'order.created',
+      payload: { orderId: ctx.input.orderId, total: ctx.state.total },
+    },
+  }))
+  .build();
+```
+
+This reads like a specification: validate, calculate, charge (with retries), persist (in a transaction), then publish an event. Anyone reviewing this file — human or AI — immediately understands the operation's shape and policies.
+
+## 3. Implement each step in its own module
+
+Each step file defines a narrow interface for what it needs from the context and exports a single handler function.
+
+### Validation step
+
+```typescript
+// flows/process-order/steps/validate-order.ts
+import { ValidationError } from '@celom/prose';
+import type { FlowContext } from '@celom/prose';
+import type { OrderInput, OrderDeps } from '../types';
+
+interface ValidateOrderState {}
+
+export function validateOrder(
+  ctx: FlowContext<OrderInput, OrderDeps, ValidateOrderState>
+): void {
+  if (ctx.input.items.length === 0) {
+    throw ValidationError.single('items', 'Order must have at least one item');
+  }
+
+  const invalidItems = ctx.input.items.filter(
+    (i) => i.quantity <= 0 || i.price <= 0
+  );
+  if (invalidItems.length > 0) {
+    throw ValidationError.multiple(
+      invalidItems.map((i) => ({
+        field: `item.${i.sku}`,
+        message: 'Invalid quantity or price',
+      }))
+    );
+  }
+}
+```
+
+### Pure computation step
+
+```typescript
+// flows/process-order/steps/calculate-total.ts
+import type { FlowContext } from '@celom/prose';
+import type { OrderInput, OrderDeps } from '../types';
+
+interface CalculateTotalState {}
+
+export function calculateTotal(
+  ctx: FlowContext<OrderInput, OrderDeps, CalculateTotalState>
+) {
+  const subtotal = ctx.input.items.reduce(
+    (sum, item) => sum + item.price * item.quantity,
+    0
+  );
+  const tax = subtotal * 0.08;
+  return { subtotal, tax, total: subtotal + tax };
+}
+```
+
+### Step with an external dependency
+
+```typescript
+// flows/process-order/steps/charge-payment.ts
+import type { FlowContext } from '@celom/prose';
+import type { OrderInput, OrderDeps } from '../types';
+
+interface ChargePaymentState {
+  total: number;
+}
+
+export async function chargePayment(
+  ctx: FlowContext<OrderInput, OrderDeps, ChargePaymentState>
+) {
+  const receipt = await ctx.deps.paymentGateway.charge(
+    ctx.state.total,
+    ctx.input.userId
+  );
+  return { receiptId: receipt.receiptId };
+}
+```
+
+Note how `ChargePaymentState` declares exactly what this step expects from prior state. It needs `total` — nothing more. This makes the dependency on the `calculateTotal` step explicit at the type level.
+
+### Transaction step
+
+```typescript
+// flows/process-order/steps/persist-order.ts
+import type { FlowContext } from '@celom/prose';
+import type { OrderInput, OrderDeps } from '../types';
+
+interface PersistOrderState {
+  subtotal: number;
+  tax: number;
+  total: number;
+  receiptId: string;
+}
+
+export async function persistOrder(
+  ctx: FlowContext<OrderInput, OrderDeps, PersistOrderState>,
+  tx: unknown
+) {
+  const orderId = await (tx as any).insert('orders', {
+    id: ctx.input.orderId,
+    userId: ctx.input.userId,
+    subtotal: ctx.state.subtotal,
+    tax: ctx.state.tax,
+    total: ctx.state.total,
+    receiptId: ctx.state.receiptId,
+    status: 'confirmed',
+  });
+  return { confirmedOrderId: orderId };
+}
+```
+
+`PersistOrderState` enumerates every field this step reads from state. If a prior step's return type changes in a way that breaks this contract, TypeScript catches it.
+
+## Why this matters
+
+### Each step is a pure, testable function
+
+Steps are plain functions with typed inputs. You test them by constructing a minimal context — no flow runner needed:
+
+```typescript
+import { describe, it, expect } from 'vitest';
+import { calculateTotal } from './steps/calculate-total';
+
+describe('calculateTotal', () => {
+  it('computes subtotal, tax, and total', () => {
+    const ctx = {
+      input: {
+        orderId: '1',
+        userId: 'u1',
+        items: [
+          { sku: 'A', quantity: 2, price: 10 },
+          { sku: 'B', quantity: 1, price: 5 },
+        ],
+      },
+      state: {},
+      deps: {} as any,
+      meta: {} as any,
+      signal: AbortSignal.timeout(5000),
+    };
+
+    const result = calculateTotal(ctx);
+
+    expect(result.subtotal).toBe(25);
+    expect(result.tax).toBeCloseTo(2);
+    expect(result.total).toBeCloseTo(27);
+  });
+});
+```
+
+### The flow file is auditable
+
+When reviewing a business operation, the flow file is the single source of truth. You can verify:
+- The order of operations
+- Which steps have retries and what the policy is
+- Which steps run in a transaction
+- What events are published and when
+- The complete dependency surface (imports at the top)
+
+### State interfaces document data flow
+
+Each step's state interface is a declaration of its upstream dependencies. Reading `ChargePaymentState { total: number }` tells you this step depends on a prior step that produces `total`. This creates an implicit but type-checked dependency graph between steps.
+
+### AI agents can reason about each piece independently
+
+When an AI agent needs to modify or extend the flow, the structure gives it clear boundaries:
+- To understand the operation: read `flow.ts`
+- To modify a specific behavior: edit the relevant step file
+- To add a new step: create a new file in `steps/`, define its state interface, wire it into `flow.ts`
+- To audit for correctness: check each step's state interface against the steps that precede it
+
+## When to use this pattern
+
+This convention works best for flows that represent **core business operations** — order processing, user onboarding, payment reconciliation, data pipelines. These are the flows where testability, auditability, and clear contracts pay for themselves.
+
+For simple flows with two or three short steps, a single file is fine. Use your judgment — the goal is clarity, not ceremony.

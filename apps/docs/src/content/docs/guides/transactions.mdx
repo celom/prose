@@ -2,7 +2,7 @@
 title: Database Transactions
 description: Wrap steps in database transactions with any ORM.
 sidebar:
-  order: 4
+  order: 2
 ---
 
 Use `.transaction()` to wrap a step in `db.transaction()`. The transaction client is passed as the second argument to the handler.
@@ -16,15 +16,43 @@ flow.transaction('persist', async (ctx, tx) => {
 
 ## DatabaseClient interface
 
-Transaction steps require a `db` property in your dependencies conforming to:
+Transaction steps require a `db` property in your flow dependencies conforming to:
 
 ```typescript
-interface DatabaseClient {
-  transaction<T>(fn: (tx: TransactionClient) => Promise<T>): Promise<T>;
+interface DatabaseClient<TTx = unknown> {
+  transaction<T>(fn: (tx: TTx) => Promise<T>): Promise<T>;
 }
 ```
 
-This works with **Drizzle**, **Knex**, **Prisma**, or any ORM that exposes a `transaction()` method.
+This is an opinionated design choice — Prose standardizes on this interface to manage transaction lifecycle (begin, commit, rollback) and pass your ORM's native transaction client directly to step handlers. It works with **Drizzle**, **Knex**, **Prisma**, or any ORM that exposes a `transaction()` method.
+
+## Type-safe `tx` inference
+
+When you provide a typed `DatabaseClient`, Prose infers the `tx` type automatically. No manual casting needed:
+
+```typescript
+import { drizzle } from 'drizzle-orm/node-postgres';
+
+// Create your Drizzle client and export the type
+const db = drizzle({ connection: process.env.DATABASE_URL });
+export type DbClient = typeof db;
+
+type Deps = {
+  db: DbClient; // Drizzle's client satisfies DatabaseClient
+  eventPublisher: FlowEventPublisher;
+};
+
+createFlow<{ name: string }, Deps>('create-user')
+  .transaction('insert', async (ctx, tx) => {
+    // tx is inferred as the Drizzle transaction client — full autocomplete
+    const [user] = await tx
+      .insert(users)
+      .values({ name: ctx.input.name })
+      .returning();
+    return { user };
+  })
+  .build();
+```
 
 ## Example with Drizzle
 
@@ -35,18 +63,60 @@ const db = drizzle(pool);
 
 const flow = createFlow<{ name: string; email: string }>('create-user')
   .transaction('insert', async (ctx, tx) => {
-    const [user] = await tx.insert(users).values({
-      name: ctx.input.name,
-      email: ctx.input.email,
-    }).returning();
+    const [user] = await tx
+      .insert(users)
+      .values({
+        name: ctx.input.name,
+        email: ctx.input.email,
+      })
+      .returning();
     return { user };
   })
   .build();
 
-await flow.execute(
-  { name: 'Alice', email: 'alice@example.com' },
-  { db }
-);
+await flow.execute({ name: 'Alice', email: 'alice@example.com' }, { db });
+```
+
+## Extracting transaction steps
+
+When transaction handlers are inline, the `tx` type is inferred automatically. But when you extract a handler into a standalone function, you need to type the `tx` parameter explicitly. Use `TxClientOf` to derive it from your dependencies:
+
+```typescript
+// app-types.ts — define once
+import type { DatabaseClient, TxClientOf, FlowContext } from '@celom/prose';
+import type { DrizzleTransaction } from './db';
+
+export type AppDeps = {
+  db: DatabaseClient<DrizzleTransaction>;
+  eventPublisher: MyPublisher;
+};
+
+export type Tx = TxClientOf<AppDeps>; // DrizzleTransaction
+```
+
+```typescript
+// steps/save-user.ts — fully typed, no casting
+import type { FlowContext } from '@celom/prose';
+import type { AppDeps, Tx } from '../app-types';
+
+export const saveUser = async (
+  ctx: FlowContext<CreateUserInput, AppDeps, ValidatedState>,
+  tx: Tx
+) => {
+  const [user] = await tx
+    .insert(users)
+    .values({ name: ctx.state.validatedName })
+    .returning();
+  return { user };
+};
+```
+
+```typescript
+// flow definition
+createFlow<CreateUserInput, AppDeps>('create-user')
+  .validate('checkInput', validateInput)
+  .transaction('save', saveUser)
+  .build();
 ```
 
 ## Missing database dependency
