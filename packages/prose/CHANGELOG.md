@@ -1,3 +1,13 @@
+## 0.3.0 (2026-02-27)
+
+### 🚀 Features
+
+- remove outdated examples and improve type inference in DatabaseClient and TxClient ([729c28c](https://github.com/celom/prose/commit/729c28c))
+
+### ❤️ Thank You
+
+- Carlos Mimoso
+
 ## 0.2.1 (2026-02-26)
 
 ### 🩹 Fixes
