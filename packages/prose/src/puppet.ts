@@ -1,3 +1,5 @@
+// @ts-check-only
+
 /**
  * Type inference smoke test for FlowBuilder's cons-list internals.
  * This file is NOT meant to be executed — only type-checked.
