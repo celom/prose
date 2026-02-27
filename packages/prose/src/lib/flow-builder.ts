@@ -9,7 +9,6 @@ import type {
   BaseFlowDependencies,
   FlowEvent,
   MergeStrategy,
-  TxClient,
 } from './types.js';
 import { FlowExecutor } from './flow-executor.js';
 import { deepMerge } from './utils.js';
@@ -133,7 +132,7 @@ export class FlowBuilder<
     name: string,
     handler: (
       ctx: FlowContext<TInput, TDeps, TState>,
-      tx: [TDeps] extends [never] ? unknown : TxClient<NonNullable<TDeps['db']>>,
+      tx: TDeps extends { db: { transaction(fn: (tx: infer Tx) => unknown): unknown } } ? Tx : unknown,
     ) => TResult | Promise<TResult>,
   ): FlowBuilder<TInput, TDeps, TResult & TState, TMapperOutput, TBreakOutputs> {
     return new FlowBuilder<TInput, TDeps, TResult & TState, TMapperOutput, TBreakOutputs>(

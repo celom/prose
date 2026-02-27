@@ -22,16 +22,10 @@ export interface DatabaseClient<TTx = unknown> {
 }
 
 /**
- * Extract the transaction client type from a database client.
- *
- * Works with any ORM that exposes `transaction(fn: (tx: T) => ...)`:
- * Drizzle, Prisma, Knex, etc.
+ * Helper type to extract the transaction client type from the dependencies
  */
-export type TxClient<TDb extends DatabaseClient = DatabaseClient> = TDb extends {
-  transaction<T>(fn: (tx: infer Tx) => Promise<T>): Promise<T>;
-}
-  ? Tx
-  : never;
+export type TxClientOf<TDeps extends BaseFlowDependencies> =
+  TDeps extends { db: DatabaseClient<infer TTx> } ? TTx : unknown;
 
 // ──────────────────────────────────────────────────────────
 // Event interfaces
@@ -55,6 +49,9 @@ export interface FlowEventPublisher {
   publish(channel: string, event: FlowEvent): Promise<void> | void;
 }
 
+/**
+ * Base dependencies required by all flows. Extend this with additional dependencies
+ */
 export type BaseFlowDependencies = {
   db?: DatabaseClient;
   eventPublisher?: FlowEventPublisher;
