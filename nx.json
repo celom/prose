@@ -57,7 +57,7 @@
     }
   ],
   "release": {
-    "projects": ["prose", "prose-mcp"],
+    "projects": ["@celom/prose", "@celom/prose-mcp"],
     "projectsRelationship": "fixed",
     "version": {
       "conventionalCommits": true
