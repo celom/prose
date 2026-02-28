@@ -19,18 +19,20 @@ jobs:
           filter: tree:0
           fetch-depth: 0
 
-      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
 
       # This enables task distribution via Nx Cloud
       # Run this command as early as possible, before dependencies are installed
       # Learn more at https://nx.dev/ci/reference/nx-cloud-cli#npx-nxcloud-startcirun
-      - run: bunx nx start-ci-run --distribute-on="3 linux-medium-js" --stop-agents-after="e2e-ci"
+      - run: npx nx start-ci-run --distribute-on="3 linux-medium-js" --stop-agents-after="e2e-ci"
 
-      - run: bun install --frozen-lockfile
+      - run: npm ci
 
       # Prepend any command with "nx record --" to record its logs to Nx Cloud
-      - run: bunx nx record -- bunx nx format:check --base="remotes/origin/main"
-      - run: bunx nx run-many -t lint test build typecheck e2e-ci
+      - run: npx nx record -- npx nx format:check --base="remotes/origin/main"
+      - run: npx nx run-many -t lint test build typecheck e2e-ci
       # Nx Cloud recommends fixes for failures to help you get CI green faster. Learn more: https://nx.dev/ci/features/self-healing-ci
-      - run: bunx nx fix-ci
+      - run: npx nx fix-ci
         if: always()

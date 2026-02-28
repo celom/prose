@@ -23,13 +23,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
         with:
-          bun-version: latest
+          node-version: lts/*
 
-      - run: bun install --frozen-lockfile
+      - run: npm ci
 
-      - run: bun nx build docs
+      - run: npx nx build docs
 
       - uses: actions/upload-pages-artifact@v3
         with:

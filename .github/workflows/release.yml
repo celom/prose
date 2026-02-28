@@ -22,15 +22,11 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: oven-sh/setup-bun@v2
-
       - uses: actions/setup-node@v4
         with:
           node-version: lts/*
 
-      - run: npm install -g npm@latest
-
-      - run: bun install --frozen-lockfile
+      - run: npm ci
 
       - run: git config user.name "github-actions[bot]"
       - run: git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -38,7 +34,7 @@ jobs:
       - id: release
         run: |
           BEFORE=$(git rev-parse HEAD)
-          bunx nx release --skip-publish
+          npx nx release --skip-publish
           AFTER=$(git rev-parse HEAD)
           if [ "$BEFORE" != "$AFTER" ]; then
             echo "new_release=true" >> $GITHUB_OUTPUT
@@ -50,7 +46,7 @@ jobs:
         run: git push --follow-tags
 
       - if: steps.release.outputs.new_release == 'true'
-        run: bunx nx run-many -t build -p prose prose-mcp
+        run: npx nx run-many -t build -p prose prose-mcp
 
       - if: steps.release.outputs.new_release == 'true'
         run: npx nx release publish
