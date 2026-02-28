@@ -28,13 +28,13 @@ This is an [Nx](https://nx.dev) monorepo.
 
 ```bash
 # install dependencies
-bun install
+npx install
 
 # run tests
-bun nx test prose
+npm nx test prose
 
 # build
-bun nx build prose
+npm nx build prose
 ```
 
 ## Credits

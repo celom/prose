@@ -412,6 +412,23 @@ flow.step('example', (ctx) => {
 });
 ```
 
+## MCP Server
+
+Prose includes a built-in [Model Context Protocol](https://modelcontextprotocol.io/) server that helps AI assistants write correct flow code. It provides tools for scaffolding, analyzing, listing, and validating flows, along with API reference resources and interactive prompts.
+
+Add to your MCP client configuration (Claude Code, Cursor, etc.):
+
+```json
+{
+  "mcpServers": {
+    "prose": {
+      "command": "npx",
+      "args": ["-y", "@celom/prose", "mcp"]
+    }
+  }
+}
+```
+
 ## What this isn't
 
 Prose is an **in-process** workflow orchestration library. It runs inside your existing Node.js process with zero external dependencies. Before adopting it, it's worth understanding what it does _not_ try to be:
