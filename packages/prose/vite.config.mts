@@ -2,9 +2,15 @@
 import { defineConfig } from 'vite';
 import dts from 'vite-plugin-dts';
 import * as path from 'path';
+import { readFileSync } from 'fs';
+
+const pkg = JSON.parse(readFileSync(path.join(import.meta.dirname, 'package.json'), 'utf-8'));
 
 export default defineConfig(() => ({
   root: import.meta.dirname,
+  define: {
+    __PROSE_VERSION__: JSON.stringify(pkg.version),
+  },
   cacheDir: '../../node_modules/.vite/packages/prose',
   plugins: [
     dts({
@@ -26,17 +32,32 @@ export default defineConfig(() => ({
       transformMixedEsModules: true,
     },
     lib: {
-      // Could also be a dictionary or array of multiple entry points.
-      entry: 'src/index.ts',
+      entry: {
+        index: 'src/index.ts',
+        cli: 'src/cli.ts',
+      },
       name: '@celom/prose',
-      fileName: 'index',
-      // Change this to the formats you want to support.
-      // Don't forget to update your package.json as well.
       formats: ['es' as const],
     },
     rollupOptions: {
-      // External packages that should not be bundled into your library.
-      external: [],
+      external: [
+        '@modelcontextprotocol/sdk',
+        '@modelcontextprotocol/sdk/server/mcp.js',
+        '@modelcontextprotocol/sdk/server/stdio.js',
+        'zod',
+        'node:fs',
+        'node:fs/promises',
+        'node:path',
+        'node:url',
+      ],
+      output: {
+        banner: (chunk) => {
+          if (chunk.fileName === 'cli.js') {
+            return '#!/usr/bin/env node';
+          }
+          return '';
+        },
+      },
     },
   },
   test: {

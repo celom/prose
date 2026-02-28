@@ -46,7 +46,7 @@ jobs:
         run: git push --follow-tags
 
       - if: steps.release.outputs.new_release == 'true'
-        run: npx nx run-many -t build -p prose prose-mcp
+        run: npx nx build prose
 
       - if: steps.release.outputs.new_release == 'true'
         run: npx nx release publish
