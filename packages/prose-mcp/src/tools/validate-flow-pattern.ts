@@ -184,13 +184,15 @@ function findTopLevelComma(str: string): number {
 }
 
 export function registerValidateFlowPattern(server: McpServer) {
-  server.tool(
+  server.registerTool(
     'validate_flow_pattern',
-    'Check @celom/prose flow code for common mistakes and anti-patterns. Returns a list of issues with severity and suggestions.',
     {
-      sourceCode: z
-        .string()
-        .describe('TypeScript source code containing a @celom/prose flow'),
+      description: 'Check @celom/prose flow code for common mistakes and anti-patterns. Returns a list of issues with severity and suggestions.',
+      inputSchema: {
+        sourceCode: z
+          .string()
+          .describe('TypeScript source code containing a @celom/prose flow'),
+      },
     },
     async ({ sourceCode }) => {
       const issues = validateFlowCode(sourceCode);

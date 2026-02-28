@@ -450,6 +450,115 @@ flow.step('processItems', async (ctx) => {
 
 All three layers work together. The combined signal fires as soon as any one triggers.`,
 
+  'project-structure': `# Project Structure
+
+An opinionated convention for organizing flows, steps, and dependencies into testable, auditable modules.
+
+## The principle
+
+**The flow definition is the specification.** Create it first — a readable contract that declares what happens, in what order, and what each step requires. Implementation details of each step live in their own modules.
+
+\`\`\`
+src/flows/process-order/
+├── flow.ts            ← the contract (create this first)
+├── types.ts           ← input, dependencies, and shared types
+└── steps/
+    ├── validate-order.ts
+    ├── calculate-total.ts
+    ├── charge-payment.ts
+    └── persist-order.ts
+\`\`\`
+
+## 1. Start with the types
+
+Define the flow's input shape and dependency interfaces in \`types.ts\`. This is the boundary contract — what callers must provide and what external services the flow depends on.
+
+\`\`\`typescript
+// flows/process-order/types.ts
+import type { DatabaseClient, FlowEventPublisher } from '@celom/prose';
+
+export interface OrderInput {
+  orderId: string;
+  userId: string;
+  items: Array<{ sku: string; quantity: number; price: number }>;
+}
+
+export interface OrderDeps {
+  db: DatabaseClient;
+  eventPublisher: FlowEventPublisher;
+  paymentGateway: PaymentGateway;
+}
+
+export interface PaymentGateway {
+  charge(amount: number, userId: string): Promise<{ receiptId: string }>;
+}
+\`\`\`
+
+## 2. Define the flow as a contract
+
+The flow file imports its types and step handlers, then wires them together. Reading this file tells you everything about the operation without implementation noise.
+
+\`\`\`typescript
+// flows/process-order/flow.ts
+import { createFlow } from '@celom/prose';
+import type { OrderInput, OrderDeps } from './types';
+import { validateOrder } from './steps/validate-order';
+import { calculateTotal } from './steps/calculate-total';
+import { chargePayment } from './steps/charge-payment';
+import { persistOrder } from './steps/persist-order';
+
+export const processOrder = createFlow<OrderInput, OrderDeps>('process-order')
+  .validate('validateOrder', validateOrder)
+  .step('calculateTotal', calculateTotal)
+  .step('chargePayment', chargePayment)
+    .withRetry({ maxAttempts: 3, delayMs: 500 })
+  .transaction('persistOrder', persistOrder)
+  .event('orderCreated', (ctx) => ({
+    channel: 'orders',
+    event: {
+      type: 'order.created',
+      payload: { orderId: ctx.input.orderId, total: ctx.state.total },
+    },
+  }))
+  .build();
+\`\`\`
+
+## 3. Implement each step in its own module
+
+Each step file exports a single handler function with a narrow state interface declaring exactly what it needs from prior steps.
+
+\`\`\`typescript
+// flows/process-order/steps/calculate-total.ts
+import type { FlowContext } from '@celom/prose';
+import type { OrderInput, OrderDeps } from '../types';
+
+interface CalculateTotalState {}
+
+export function calculateTotal(
+  ctx: FlowContext<OrderInput, OrderDeps, CalculateTotalState>
+) {
+  const subtotal = ctx.input.items.reduce(
+    (sum, item) => sum + item.price * item.quantity,
+    0
+  );
+  const tax = subtotal * 0.08;
+  return { subtotal, tax, total: subtotal + tax };
+}
+\`\`\`
+
+Each step's state interface documents the data flow — \`ChargePaymentState { total: number }\` tells you this step depends on a prior step that produces \`total\`.
+
+## Why this matters
+
+- **Each step is a pure, testable function** — test by constructing a minimal context, no flow runner needed
+- **The flow file is auditable** — single source of truth for operation order, retry policies, transactions, and events
+- **State interfaces document data flow** — implicit but type-checked dependency graph between steps
+- **AI agents can reason about each piece independently** — clear boundaries for understanding, modifying, and extending flows
+
+## When to use this pattern
+
+Use for flows that represent **core business operations** — order processing, user onboarding, payment reconciliation, data pipelines. For simple flows with two or three short steps, a single file is fine.`,
+
   observability: `# Observability
 
 Pass an observer to \`.execute()\` to hook into lifecycle events.

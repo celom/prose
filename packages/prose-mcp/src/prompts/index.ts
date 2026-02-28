@@ -3,21 +3,23 @@ import { z } from 'zod';
 import { QUICK_REFERENCE } from '../content/quick-reference.js';
 
 export function registerPrompts(server: McpServer) {
-  server.prompt(
+  server.registerPrompt(
     'design-flow',
-    'Interactive assistant for designing a new @celom/prose workflow',
     {
-      description: z
-        .string()
-        .describe(
-          'Describe the business operation this flow should handle',
-        ),
-      constraints: z
-        .string()
-        .optional()
-        .describe(
-          'Any constraints: needs transactions, retries, specific error handling, etc.',
-        ),
+      description: 'Interactive assistant for designing a new @celom/prose workflow',
+      argsSchema: {
+        description: z
+          .string()
+          .describe(
+            'Describe the business operation this flow should handle',
+          ),
+        constraints: z
+          .string()
+          .optional()
+          .describe(
+            'Any constraints: needs transactions, retries, specific error handling, etc.',
+          ),
+      },
     },
     ({ description, constraints }) => ({
       messages: [
@@ -59,23 +61,46 @@ Key rules:
 - State is accumulated: each step's return object is shallow-merged into ctx.state
 - Input is readonly via ctx.input
 
-Provide the flow design, then generate the complete TypeScript code.`,
+## Project structure
+
+For core business operations with 4+ steps, follow the recommended project structure convention. Each flow gets its own directory with separate files for types, the flow contract, and individual step handlers:
+
+\\\`\\\`\\\`
+src/flows/{flow-name}/
+├── flow.ts            ← the contract (create this first)
+├── types.ts           ← input, dependencies, and shared types
+└── steps/
+    ├── {step-name}.ts ← one file per step handler
+    └── ...
+\\\`\\\`\\\`
+
+- **types.ts**: Define the input interface and dependencies interface. This is the boundary contract.
+- **flow.ts**: Import types and step handlers, wire them together with createFlow(). This file is the specification — readable without implementation noise.
+- **steps/*.ts**: Each step exports a single handler function with a narrow state interface declaring exactly what it needs from prior steps.
+
+Each step's state interface documents its upstream dependencies (e.g. \`ChargePaymentState { total: number }\` means this step depends on a prior step that produces \`total\`).
+
+For simple flows with 2-3 short steps, a single file is fine.
+
+Provide the flow design, then generate the complete TypeScript code following this structure when appropriate.`,
           },
         },
       ],
     }),
   );
 
-  server.prompt(
+  server.registerPrompt(
     'debug-flow',
-    'Help debug issues with an existing @celom/prose flow',
     {
-      code: z
-        .string()
-        .describe('The flow source code that has issues'),
-      problem: z
-        .string()
-        .describe('Description of the problem or error message'),
+      description: 'Help debug issues with an existing @celom/prose flow',
+      argsSchema: {
+        code: z
+          .string()
+          .describe('The flow source code that has issues'),
+        problem: z
+          .string()
+          .describe('Description of the problem or error message'),
+      },
     },
     ({ code, problem }) => ({
       messages: [

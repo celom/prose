@@ -56,18 +56,20 @@ async function findTypeScriptFiles(
 }
 
 export function registerListFlows(server: McpServer) {
-  server.tool(
+  server.registerTool(
     'list_flows',
-    'Scan a project directory for @celom/prose flow definitions and return a summary of each flow found.',
     {
-      directory: z
-        .string()
-        .describe('Absolute path to the directory to scan'),
-      maxDepth: z
-        .number()
-        .optional()
-        .default(5)
-        .describe('Maximum directory depth to scan (default: 5)'),
+      description: 'Scan a project directory for @celom/prose flow definitions and return a summary of each flow found.',
+      inputSchema: {
+        directory: z
+          .string()
+          .describe('Absolute path to the directory to scan'),
+        maxDepth: z
+          .number()
+          .optional()
+          .default(5)
+          .describe('Maximum directory depth to scan (default: 5)'),
+      },
     },
     async ({ directory, maxDepth }) => {
       const tsFiles = await findTypeScriptFiles(directory, maxDepth);

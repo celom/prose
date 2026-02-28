@@ -162,15 +162,17 @@ function splitTypeParams(typeParams: string): string[] {
 }
 
 export function registerAnalyzeFlow(server: McpServer) {
-  server.tool(
+  server.registerTool(
     'analyze_flow',
-    'Analyze a @celom/prose flow definition from source code. Extracts flow structure, step types, state shape, and potential issues.',
     {
-      sourceCode: z
-        .string()
-        .describe(
-          'TypeScript source code containing a @celom/prose flow definition',
-        ),
+      description: 'Analyze a @celom/prose flow definition from source code. Extracts flow structure, step types, state shape, and potential issues.',
+      inputSchema: {
+        sourceCode: z
+          .string()
+          .describe(
+            'TypeScript source code containing a @celom/prose flow definition',
+          ),
+      },
     },
     async ({ sourceCode }) => {
       const analysis = analyzeFlowSource(sourceCode);
