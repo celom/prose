@@ -1,3 +1,13 @@
+## 0.3.2 (2026-02-28)
+
+### 🚀 Features
+
+- **mcp:** implement MCP server and tools for flow analysis directly unto the prose library ([eb02360](https://github.com/celom/prose/commit/eb02360))
+
+### ❤️ Thank You
+
+- Carlos Mimoso
+
 ## 0.3.1 (2026-02-27)
 
 ### 🚀 Features
