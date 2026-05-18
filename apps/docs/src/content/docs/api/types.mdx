@@ -2,7 +2,7 @@
 title: Types
 description: API reference for core TypeScript types exported by Prose.
 sidebar:
-  order: 6
+  order: 7
 ---
 
 ## `FlowContext`
@@ -58,8 +58,22 @@ interface FlowMeta {
   startedAt: Date;
   currentStep?: string;
   correlationId?: string;
+  // Durability-only — present when execute() was passed a `durability` option
+  runId?: string;
+  idempotencyKey?: string;
+  isResuming?: boolean;
 }
 ```
+
+| Field | Description |
+|-------|-------------|
+| `flowName` | The flow's name. |
+| `startedAt` | When this `execute()` call began. Not preserved across resumes — set on each invocation. |
+| `currentStep` | The name of the step currently executing. |
+| `correlationId` | Custom or auto-generated ID propagated to events and observers. |
+| `runId` | The `DurabilityOptions.runId` of this run. Present only when durability is configured. |
+| `idempotencyKey` | Stable per-step key (`${runId}:${currentStep}`). Pass to external APIs that support idempotency so re-runs are safe. Present only when durability is configured. |
+| `isResuming` | `true` when this execution loaded an existing checkpoint rather than starting fresh. Present only when durability is configured. |
 
 ## `RetryOptions`
 

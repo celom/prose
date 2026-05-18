@@ -14,7 +14,7 @@ const flow = createFlow<{ orderId: string }>('process-order')
 await flow.execute({ orderId: 'ord_123' }, { db, eventPublisher });
 ```
 
-Type-safe state threading, retries with exponential backoff, timeouts, database transactions, event publishing, parallel execution, and observability hooks — using plain async/await with zero dependencies.
+Type-safe state threading, retries with exponential backoff, timeouts, database transactions, event publishing, parallel execution, durability, and observability hooks — using plain async/await with zero dependencies.
 
 ## Packages
 

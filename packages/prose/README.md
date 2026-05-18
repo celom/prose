@@ -50,6 +50,7 @@ npm install @celom/prose
 - **Conditional steps & early exit** — skip steps based on runtime conditions or short-circuit the flow entirely
 - **Composable sub-flows** — extract and reuse step sequences via `.pipe()`
 - **Observability hooks** — plug in logging, metrics, or tracing through the observer interface
+- **Durable execution (opt-in)** — checkpoint after each step so a crashed run resumes from the next undone step instead of starting over
 - **Zero dependencies** — runs in-process with no external infrastructure
 
 ## Guide
@@ -405,12 +406,62 @@ Every step handler receives `ctx.meta` with runtime metadata:
 
 ```typescript
 flow.step('example', (ctx) => {
-  ctx.meta.flowName;      // 'process-order'
-  ctx.meta.currentStep;   // 'example'
-  ctx.meta.startedAt;     // Date
-  ctx.meta.correlationId; // auto-generated or custom
+  ctx.meta.flowName;       // 'process-order'
+  ctx.meta.currentStep;    // 'example'
+  ctx.meta.startedAt;      // Date
+  ctx.meta.correlationId;  // auto-generated or custom
+  ctx.meta.runId;          // present only when durability is configured
+  ctx.meta.idempotencyKey; // `${runId}:${stepName}` — pass to external APIs
+  ctx.meta.isResuming;     // true when this execution loaded a saved checkpoint
 });
 ```
+
+### Durability
+
+Opt-in skip-ahead checkpointing. After every successful step, Prose persists a checkpoint to the configured store. Re-invoking `execute()` with the same `runId` resumes from the next undone step. Re-invoking on a completed run returns the saved result without re-execution.
+
+```typescript
+import { createFlow, MemoryDurabilityStore } from '@celom/prose';
+
+const store = new MemoryDurabilityStore();
+
+const processOrder = createFlow<{ orderId: string }>('process-order')
+  .step('chargePayment', async (ctx) => {
+    const receipt = await payments.charge({
+      amount: 100,
+      idempotencyKey: ctx.meta.idempotencyKey,
+    });
+    return { receipt };
+  })
+  .step('persistOrder', async (ctx) => {
+    await db.orders.upsert({ id: ctx.input.orderId, receiptId: ctx.state.receipt.id });
+  })
+  .build();
+
+// First call — crashes after chargePayment, before persistOrder
+await processOrder.execute({ orderId: 'ord_42' }, { db, payments }, {
+  durability: { store, runId: 'ord_42' },
+});
+
+// After restart — chargePayment is skipped, persistOrder runs
+await processOrder.execute({ orderId: 'ord_42' }, { db, payments }, {
+  durability: { store, runId: 'ord_42' },
+});
+```
+
+The three behaviors of `execute()` with a `durability` option:
+
+| Stored status | Behavior |
+|---------------|----------|
+| _no checkpoint_ | Fresh run — every step executes |
+| `running` / `failed` | Resume — completed steps are skipped, state is loaded, execution continues at the first undone step |
+| `completed` | Replay — the saved result is returned without invoking any handler |
+
+A step may run twice across a crash. `ctx.meta.idempotencyKey` is a stable per-step key (`${runId}:${stepName}`) — pass it to Stripe, SQS, or any external API that supports idempotency.
+
+`MemoryDurabilityStore` is for tests and dev. For production, implement the three-method `DurabilityStore` interface against your own persistence layer. A conformance test suite lives at `src/lib/__tests__/store-conformance.ts` (not re-exported — deep-import or copy-vendor for now).
+
+See [the durability guide](https://celom.github.io/prose/guides/durability/) for feature interactions, patterns, and the full idempotency contract.
 
 ## MCP Server
 
@@ -433,7 +484,7 @@ Add to your MCP client configuration (Claude Code, Cursor, etc.):
 
 Prose is an **in-process** workflow orchestration library. It runs inside your existing Node.js process with zero external dependencies. Before adopting it, it's worth understanding what it does _not_ try to be:
 
-**Not a durable execution engine.** If you need workflows that survive process restarts, resume after hours or days, or coordinate across distributed services, look at [Temporal](https://temporal.io), [Inngest](https://www.inngest.com), or [Trigger.dev](https://trigger.dev). These require infrastructure (servers, queues, databases) but give you persistence and replay guarantees that an in-process library fundamentally cannot.
+**Not a Temporal replacement.** Prose ships opt-in [skip-ahead durability](https://celom.github.io/prose/guides/durability/) — successful steps are checkpointed, and re-invoking `execute()` with the same `runId` resumes from the next undone step or replays the saved result. That covers crash recovery for in-process flows. It does **not** give you long sleeps that survive process death (`await sleep(7.days)`), an automatic resumer that re-invokes crashed runs for you, or distributed worker claim/lease coordination. For those, reach for [Temporal](https://temporal.io), [Inngest](https://www.inngest.com), or [Trigger.dev](https://trigger.dev).
 
 **Not a full effect system.** [Effect-TS](https://effect.website) is more powerful in every technical dimension — typed errors in the return signature, type-level dependency injection via Layers, fibers, streams, and a massive standard library. If your team can invest in learning its functional programming model, Effect is the more capable choice. Prose trades that power for simplicity: pure async/await, no monads, no new paradigms to learn.
 
