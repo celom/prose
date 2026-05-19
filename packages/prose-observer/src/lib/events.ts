@@ -6,7 +6,8 @@
  * on every variant so consumers can group events into executions.
  *
  * `unknown` is used for user-supplied payloads (`input`, `output`, `result`, `returnValue`).
- * The redaction pass in Slice 2 runs on these fields before events leave the observer.
+ * The redaction pass in `ConsoleObserverImpl` runs on these fields before events
+ * leave the observer.
  */
 
 export interface SerializedError {
@@ -22,6 +23,28 @@ export interface ObserverEventBase {
   /** Wall-clock millis (Date.now()). */
   ts: number;
 }
+
+/**
+ * Per-step state delta. Keys are top-level keys of the flow state object;
+ * shallow comparison only — nested object changes show up as a single
+ * `changed` entry with the full before/after subtree.
+ */
+export interface StateDiff {
+  added: Record<string, unknown>;
+  removed: string[];
+  changed: Record<string, { before: unknown; after: unknown }>;
+}
+
+/**
+ * Captured state attached to a `step.complete` event. The variant depends on
+ * the `stateCapture` option:
+ *   - `'diff'` (default) → `{ mode: 'diff', diff }`
+ *   - `'full'`          → `{ mode: 'full', before, after }`
+ *   - `'off'`           → omitted entirely from the event
+ */
+export type StateCapture =
+  | { mode: 'diff'; diff: StateDiff }
+  | { mode: 'full'; before: unknown; after: unknown };
 
 export interface FlowStartEvent extends ObserverEventBase {
   type: 'flow.start';
@@ -57,6 +80,7 @@ export interface StepCompleteEvent extends ObserverEventBase {
   stepName: string;
   result: unknown;
   durationMs: number;
+  state?: StateCapture;
 }
 
 export interface StepErrorEvent extends ObserverEventBase {
