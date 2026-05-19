@@ -11,13 +11,6 @@ export default [
           ignoredFiles: [
             '{projectRoot}/eslint.config.{js,cjs,mjs,ts,cts,mts}',
             '{projectRoot}/vite.config.{js,ts,mjs,mts}',
-            // Test files and shared test helpers (may import vitest)
-            '{projectRoot}/src/**/__tests__/**',
-          ],
-          ignoredDependencies: [
-            '@celom/prose-observer',
-            '@modelcontextprotocol/sdk',
-            'zod',
           ],
         },
       ],

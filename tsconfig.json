@@ -5,6 +5,12 @@
   "references": [
     {
       "path": "./packages/prose"
+    },
+    {
+      "path": "./packages/prose-observer"
+    },
+    {
+      "path": "./apps/console"
     }
   ]
 }
