@@ -26,12 +26,11 @@ export default defineConfig(() => ({
       transformMixedEsModules: true,
     },
     lib: {
-      // Could also be a dictionary or array of multiple entry points.
-      entry: 'src/index.ts',
+      entry: {
+        index: 'src/index.ts',
+        cli: 'src/cli.ts',
+      },
       name: '@celom/prose-observer',
-      fileName: 'index',
-      // Change this to the formats you want to support.
-      // Don't forget to update your package.json as well.
       formats: ['es' as const],
     },
     rollupOptions: {
@@ -54,6 +53,12 @@ export default defineConfig(() => ({
         'path',
         'url',
       ],
+      output: {
+        banner: (chunk) => {
+          if (chunk.fileName === 'cli.js') return '#!/usr/bin/env node';
+          return '';
+        },
+      },
     },
   },
   test: {

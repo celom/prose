@@ -14,7 +14,11 @@ export default [
             // Test files and shared test helpers (may import vitest)
             '{projectRoot}/src/**/__tests__/**',
           ],
-          ignoredDependencies: ['@modelcontextprotocol/sdk', 'zod'],
+          ignoredDependencies: [
+            '@celom/prose-observer',
+            '@modelcontextprotocol/sdk',
+            'zod',
+          ],
         },
       ],
     },
